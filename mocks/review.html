@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Megatest — Review Run #247</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="sidebar">
+    <div class="sidebar__logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      Megatest
+    </div>
+    <nav class="sidebar__nav">
+      <a class="nav-item" href="index.html">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M6.906.664a1.749 1.749 0 012.188 0l5.25 4.2a.75.75 0 01-.938 1.172L13 5.726V14.5a1.75 1.75 0 01-1.75 1.75h-1.5a.75.75 0 01-.75-.75v-3.5a.75.75 0 00-.75-.75h-1.5a.75.75 0 00-.75.75v3.5a.75.75 0 01-.75.75h-1.5A1.75 1.75 0 013 14.5V5.726l-.406.31a.75.75 0 01-.938-1.172l5.25-4.2z"/></svg>
+        Dashboard
+      </a>
+      <div class="sidebar__section">Projects</div>
+      <a class="nav-item active" href="project.html">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0113.25 16h-9.5A1.75 1.75 0 012 14.25V1.75z"/></svg>
+        acme/webapp
+        <span class="nav-item__badge">2</span>
+      </a>
+      <a class="nav-item" href="project.html">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0113.25 16h-9.5A1.75 1.75 0 012 14.25V1.75z"/></svg>
+        acme/marketing
+      </a>
+    </nav>
+    <div class="sidebar__footer row gap-sm">
+      <div class="avatar">JD</div>
+      <div class="stack">
+        <span class="text-sm" style="font-weight:500">Jane Doe</span>
+        <span class="text-xs muted">Acme Inc</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===== Main ===== -->
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar__breadcrumb">
+        <a href="index.html">Dashboard</a>
+        <span style="color:var(--c-border)">/</span>
+        <a href="project.html">acme/webapp</a>
+        <span style="color:var(--c-border)">/</span>
+        <span>Run #247</span>
+      </div>
+      <div class="topbar__actions">
+        <button class="btn btn--primary">
+          <svg viewBox="0 0 16 16" fill="currentColor" width="16" height="16"><path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/></svg>
+          Approve all
+        </button>
+      </div>
+    </div>
+
+    <!-- Run metadata -->
+    <div class="p-lg" style="border-bottom:1px solid var(--c-border);background:var(--c-surface)">
+      <div class="row gap-lg wrap">
+        <div class="stack">
+          <span class="text-xs muted">Branch</span>
+          <span class="mono text-sm">feat/checkout-redesign</span>
+        </div>
+        <div class="stack">
+          <span class="text-xs muted">Commit</span>
+          <span class="mono text-sm">a3f9c2d</span>
+        </div>
+        <div class="stack">
+          <span class="text-xs muted">PR</span>
+          <a class="text-sm">#42 Redesign checkout flow</a>
+        </div>
+        <div class="stack">
+          <span class="text-xs muted">Duration</span>
+          <span class="text-sm">48s</span>
+        </div>
+        <div class="stack">
+          <span class="text-xs muted">Triggered</span>
+          <span class="text-sm muted">12 min ago</span>
+        </div>
+        <div class="ml-auto row gap-sm">
+          <span class="badge badge--pass">14 passed</span>
+          <span class="badge badge--fail">2 failed</span>
+          <span class="badge badge--new">1 new</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters" style="background:var(--c-surface);border-bottom:1px solid var(--c-border)">
+      <button class="filter-chip active">All <span class="text-xs">(17)</span></button>
+      <button class="filter-chip">Failed <span class="text-xs">(2)</span></button>
+      <button class="filter-chip">New <span class="text-xs">(1)</span></button>
+      <button class="filter-chip">Passed <span class="text-xs">(14)</span></button>
+    </div>
+
+    <!-- Checkpoints -->
+    <div class="page page--wide">
+      <div class="stack gap-lg">
+
+        <!-- Failed checkpoint 1 -->
+        <div class="checkpoint checkpoint--fail">
+          <div class="checkpoint__header">
+            <span class="badge badge--fail">Failed</span>
+            <span class="checkpoint__title">Checkout &mdash; payment-form</span>
+            <div class="checkpoint__meta">
+              <span class="mono">1280x720</span>
+              <span style="color:var(--c-fail)">2.4% diff</span>
+              <span>1,847 changed px</span>
+            </div>
+          </div>
+          <div class="checkpoint__images">
+            <div class="checkpoint__image-slot">
+              <div class="checkpoint__image-label">Baseline</div>
+              <div class="checkpoint__image-wrap">
+                <div class="mock-screenshot mock-screenshot--baseline">
+                  <div style="text-align:center">
+                    <div style="width:200px;height:24px;background:rgba(255,255,255,.08);border-radius:4px;margin:0 auto 8px"></div>
+                    <div style="width:160px;height:32px;background:rgba(255,255,255,.06);border-radius:4px;margin:0 auto 8px"></div>
+                    <div style="width:160px;height:32px;background:rgba(255,255,255,.06);border-radius:4px;margin:0 auto 8px"></div>
+                    <div style="width:120px;height:28px;background:rgba(56,139,253,.2);border-radius:4px;margin:0 auto"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="checkpoint__image-slot">
+              <div class="checkpoint__image-label">Actual</div>
+              <div class="checkpoint__image-wrap">
+                <div class="mock-screenshot mock-screenshot--actual">
+                  <div style="text-align:center">
+                    <div style="width:200px;height:24px;background:rgba(255,255,255,.08);border-radius:4px;margin:0 auto 8px"></div>
+                    <div style="width:180px;height:36px;background:rgba(255,255,255,.06);border-radius:4px;margin:0 auto 8px"></div>
+                    <div style="width:180px;height:36px;background:rgba(255,255,255,.06);border-radius:4px;margin:0 auto 8px"></div>
+                    <div style="width:140px;height:32px;background:rgba(63,185,80,.2);border-radius:4px;margin:0 auto"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="checkpoint__image-slot">
+              <div class="checkpoint__image-label">Diff</div>
+              <div class="checkpoint__image-wrap">
+                <div class="mock-screenshot mock-screenshot--diff diff-highlight">
+                  <div style="text-align:center">
+                    <div style="width:200px;height:24px;background:rgba(255,255,255,.03);border-radius:4px;margin:0 auto 8px"></div>
+                    <div style="width:180px;height:36px;background:rgba(248,81,73,.15);border-radius:4px;margin:0 auto 8px"></div>
+                    <div style="width:180px;height:36px;background:rgba(248,81,73,.15);border-radius:4px;margin:0 auto 8px"></div>
+                    <div style="width:140px;height:32px;background:rgba(248,81,73,.2);border-radius:4px;margin:0 auto"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="checkpoint__actions">
+            <button class="btn btn--primary btn--sm">
+              <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14"><path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/></svg>
+              Approve
+            </button>
+            <button class="btn btn--danger btn--sm">
+              <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14"><path d="M3.72 3.72a.75.75 0 011.06 0L8 6.94l3.22-3.22a.75.75 0 111.06 1.06L9.06 8l3.22 3.22a.75.75 0 11-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 01-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 010-1.06z"/></svg>
+              Reject
+            </button>
+            <span class="text-xs muted ml-auto">Workflow: <span class="mono">checkout</span> &middot; Threshold: 0.1%</span>
+          </div>
+        </div>
+
+        <!-- Failed checkpoint 2 -->
+        <div class="checkpoint checkpoint--fail">
+          <div class="checkpoint__header">
+            <span class="badge badge--fail">Failed</span>
+            <span class="checkpoint__title">Checkout &mdash; order-summary</span>
+            <div class="checkpoint__meta">
+              <span class="mono">1280x720</span>
+              <span style="color:var(--c-fail)">1.1% diff</span>
+              <span>892 changed px</span>
+            </div>
+          </div>
+          <div class="checkpoint__images">
+            <div class="checkpoint__image-slot">
+              <div class="checkpoint__image-label">Baseline</div>
+              <div class="checkpoint__image-wrap">
+                <div class="mock-screenshot mock-screenshot--baseline">
+                  <div style="text-align:center">
+                    <div style="width:180px;height:20px;background:rgba(255,255,255,.08);border-radius:4px;margin:0 auto 6px"></div>
+                    <div style="width:160px;height:14px;background:rgba(255,255,255,.04);border-radius:3px;margin:0 auto 4px"></div>
+                    <div style="width:160px;height:14px;background:rgba(255,255,255,.04);border-radius:3px;margin:0 auto 4px"></div>
+                    <div style="width:160px;height:14px;background:rgba(255,255,255,.04);border-radius:3px;margin:0 auto 8px"></div>
+                    <div style="width:160px;height:1px;background:rgba(255,255,255,.1);margin:0 auto 8px"></div>
+                    <div style="width:120px;height:18px;background:rgba(255,255,255,.08);border-radius:3px;margin:0 auto"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="checkpoint__image-slot">
+              <div class="checkpoint__image-label">Actual</div>
+              <div class="checkpoint__image-wrap">
+                <div class="mock-screenshot mock-screenshot--actual">
+                  <div style="text-align:center">
+                    <div style="width:180px;height:20px;background:rgba(255,255,255,.08);border-radius:4px;margin:0 auto 6px"></div>
+                    <div style="width:160px;height:14px;background:rgba(255,255,255,.04);border-radius:3px;margin:0 auto 4px"></div>
+                    <div style="width:160px;height:14px;background:rgba(255,255,255,.04);border-radius:3px;margin:0 auto 4px"></div>
+                    <div style="width:160px;height:14px;background:rgba(255,255,255,.04);border-radius:3px;margin:0 auto 4px"></div>
+                    <div style="width:160px;height:14px;background:rgba(210,153,34,.1);border-radius:3px;margin:0 auto 8px"></div>
+                    <div style="width:160px;height:1px;background:rgba(255,255,255,.1);margin:0 auto 8px"></div>
+                    <div style="width:120px;height:18px;background:rgba(255,255,255,.08);border-radius:3px;margin:0 auto"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="checkpoint__image-slot">
+              <div class="checkpoint__image-label">Diff</div>
+              <div class="checkpoint__image-wrap">
+                <div class="mock-screenshot mock-screenshot--diff">
+                  <div style="text-align:center">
+                    <div style="width:180px;height:20px;background:rgba(255,255,255,.02);border-radius:4px;margin:0 auto 6px"></div>
+                    <div style="width:160px;height:14px;background:rgba(255,255,255,.02);border-radius:3px;margin:0 auto 4px"></div>
+                    <div style="width:160px;height:14px;background:rgba(255,255,255,.02);border-radius:3px;margin:0 auto 4px"></div>
+                    <div style="width:160px;height:14px;background:rgba(255,255,255,.02);border-radius:3px;margin:0 auto 4px"></div>
+                    <div style="width:160px;height:14px;background:rgba(248,81,73,.3);border-radius:3px;margin:0 auto 8px"></div>
+                    <div style="width:160px;height:1px;background:rgba(255,255,255,.05);margin:0 auto 8px"></div>
+                    <div style="width:120px;height:18px;background:rgba(248,81,73,.15);border-radius:3px;margin:0 auto"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="checkpoint__actions">
+            <button class="btn btn--primary btn--sm">
+              <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14"><path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/></svg>
+              Approve
+            </button>
+            <button class="btn btn--danger btn--sm">
+              <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14"><path d="M3.72 3.72a.75.75 0 011.06 0L8 6.94l3.22-3.22a.75.75 0 111.06 1.06L9.06 8l3.22 3.22a.75.75 0 11-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 01-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 010-1.06z"/></svg>
+              Reject
+            </button>
+            <span class="text-xs muted ml-auto">Workflow: <span class="mono">checkout</span> &middot; Threshold: 0.1%</span>
+          </div>
+        </div>
+
+        <!-- New checkpoint -->
+        <div class="checkpoint checkpoint--new">
+          <div class="checkpoint__header">
+            <span class="badge badge--new">New</span>
+            <span class="checkpoint__title">Checkout &mdash; confirmation-page</span>
+            <div class="checkpoint__meta">
+              <span class="mono">1280x720</span>
+              <span style="color:var(--c-new)">No baseline</span>
+            </div>
+          </div>
+          <div class="checkpoint__images checkpoint__images--two">
+            <div class="checkpoint__image-slot">
+              <div class="checkpoint__image-label">Actual</div>
+              <div class="checkpoint__image-wrap">
+                <div class="mock-screenshot mock-screenshot--new">
+                  <div style="text-align:center">
+                    <div style="width:40px;height:40px;border-radius:50%;background:rgba(63,185,80,.2);margin:0 auto 8px;display:flex;align-items:center;justify-content:center">
+                      <svg viewBox="0 0 16 16" fill="rgba(63,185,80,.6)" width="20" height="20"><path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/></svg>
+                    </div>
+                    <div style="width:140px;height:16px;background:rgba(255,255,255,.08);border-radius:3px;margin:0 auto 6px"></div>
+                    <div style="width:100px;height:12px;background:rgba(255,255,255,.04);border-radius:3px;margin:0 auto"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="checkpoint__image-slot" style="display:flex;align-items:center;justify-content:center">
+              <div class="empty" style="padding:var(--sp-lg)">
+                <svg viewBox="0 0 16 16" fill="currentColor" width="32" height="32" style="color:var(--c-border)"><path d="M16 13.25A1.75 1.75 0 0114.25 15H1.75A1.75 1.75 0 010 13.25V2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5z"/></svg>
+                <span class="text-xs muted" style="margin-top:var(--sp-sm)">No baseline yet</span>
+              </div>
+            </div>
+          </div>
+          <div class="checkpoint__actions">
+            <button class="btn btn--primary btn--sm">
+              <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14"><path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/></svg>
+              Accept as baseline
+            </button>
+            <span class="text-xs muted ml-auto">Workflow: <span class="mono">checkout</span></span>
+          </div>
+        </div>
+
+        <!-- Passed checkpoints (collapsed group) -->
+        <div class="card">
+          <div class="card__header" style="cursor:pointer">
+            <span class="badge badge--pass">Passed</span>
+            <span style="font-weight:500">14 checkpoints passed</span>
+            <span class="text-xs muted ml-auto">Click to expand</span>
+          </div>
+
+          <!-- Show 2 sample passed checkpoints -->
+          <div class="checkpoint" style="border:none;border-radius:0;border-bottom:1px solid var(--c-border)">
+            <div class="checkpoint__header">
+              <span class="dot dot--pass"></span>
+              <span class="checkpoint__title" style="font-size:var(--fs-sm)">Homepage &mdash; hero-section</span>
+              <div class="checkpoint__meta">
+                <span class="mono">1280x720</span>
+                <span style="color:var(--c-pass)">0.0% diff</span>
+              </div>
+            </div>
+          </div>
+          <div class="checkpoint" style="border:none;border-radius:0;border-bottom:1px solid var(--c-border)">
+            <div class="checkpoint__header">
+              <span class="dot dot--pass"></span>
+              <span class="checkpoint__title" style="font-size:var(--fs-sm)">Homepage &mdash; hero-section</span>
+              <div class="checkpoint__meta">
+                <span class="mono">375x812</span>
+                <span style="color:var(--c-pass)">0.0% diff</span>
+              </div>
+            </div>
+          </div>
+          <div class="checkpoint" style="border:none;border-radius:0;border-bottom:1px solid var(--c-border)">
+            <div class="checkpoint__header">
+              <span class="dot dot--pass"></span>
+              <span class="checkpoint__title" style="font-size:var(--fs-sm)">Homepage &mdash; footer</span>
+              <div class="checkpoint__meta">
+                <span class="mono">1280x720</span>
+                <span style="color:var(--c-pass)">0.02% diff</span>
+              </div>
+            </div>
+          </div>
+          <div class="checkpoint" style="border:none;border-radius:0;border-bottom:1px solid var(--c-border)">
+            <div class="checkpoint__header">
+              <span class="dot dot--pass"></span>
+              <span class="checkpoint__title" style="font-size:var(--fs-sm)">Login flow &mdash; login-form</span>
+              <div class="checkpoint__meta">
+                <span class="mono">1280x720</span>
+                <span style="color:var(--c-pass)">0.0% diff</span>
+              </div>
+            </div>
+          </div>
+          <div class="checkpoint" style="border:none;border-radius:0">
+            <div class="checkpoint__header">
+              <span class="dot dot--pass"></span>
+              <span class="text-sm muted">+ 10 more passed checkpoints</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<script src="js/app.js"></script>
+</body>
+</html>

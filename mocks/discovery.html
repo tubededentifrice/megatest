@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Megatest — Discovery</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="sidebar">
+    <div class="sidebar__logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      Megatest
+    </div>
+    <nav class="sidebar__nav">
+      <a class="nav-item" href="index.html">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M6.906.664a1.749 1.749 0 012.188 0l5.25 4.2a.75.75 0 01-.938 1.172L13 5.726V14.5a1.75 1.75 0 01-1.75 1.75h-1.5a.75.75 0 01-.75-.75v-3.5a.75.75 0 00-.75-.75h-1.5a.75.75 0 00-.75.75v3.5a.75.75 0 01-.75.75h-1.5A1.75 1.75 0 013 14.5V5.726l-.406.31a.75.75 0 01-.938-1.172l5.25-4.2z"/></svg>
+        Dashboard
+      </a>
+      <div class="sidebar__section">Projects</div>
+      <a class="nav-item active" href="project.html">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0113.25 16h-9.5A1.75 1.75 0 012 14.25V1.75z"/></svg>
+        acme/webapp
+      </a>
+    </nav>
+    <div class="sidebar__footer row gap-sm">
+      <div class="avatar">JD</div>
+      <div class="stack">
+        <span class="text-sm" style="font-weight:500">Jane Doe</span>
+        <span class="text-xs muted">Acme Inc</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===== Main ===== -->
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar__breadcrumb">
+        <a href="index.html">Dashboard</a>
+        <span style="color:var(--c-border)">/</span>
+        <a href="project.html">acme/webapp</a>
+        <span style="color:var(--c-border)">/</span>
+        <span>Discovery</span>
+      </div>
+    </div>
+
+    <div class="page">
+
+      <!-- Discovery progress -->
+      <div class="card mb-lg">
+        <div class="card__header">
+          <h2>Workflow Discovery</h2>
+          <span class="badge badge--run ml-auto">In progress</span>
+        </div>
+        <div class="card__body">
+
+          <div class="row gap-md mb-lg">
+            <div class="stack">
+              <span class="text-xs muted">Project</span>
+              <span class="mono text-sm">acme/webapp</span>
+            </div>
+            <div class="stack">
+              <span class="text-xs muted">Framework</span>
+              <span class="text-sm">Next.js 14</span>
+            </div>
+            <div class="stack">
+              <span class="text-xs muted">Started</span>
+              <span class="text-sm muted">2 min ago</span>
+            </div>
+          </div>
+
+          <div class="progress mb-lg" style="max-width:400px">
+            <div class="progress__bar progress__bar--run" style="width:60%"></div>
+          </div>
+
+          <div class="timeline">
+
+            <div class="timeline__item">
+              <div class="timeline__dot timeline__dot--done"></div>
+              <div class="timeline__title">Setup</div>
+              <div class="timeline__desc">
+                Cloned repository &middot; Detected Next.js 14 &middot; Installed dependencies &middot; Started dev server on :3000
+              </div>
+            </div>
+
+            <div class="timeline__item">
+              <div class="timeline__dot timeline__dot--done"></div>
+              <div class="timeline__title">Exploration</div>
+              <div class="timeline__desc">
+                Discovered 12 routes &middot; Crawled 8 pages &middot; Found login form, dashboard, settings, checkout flow
+              </div>
+              <div class="mt-md">
+                <div class="card" style="border-radius:var(--r-md)">
+                  <table class="table">
+                    <thead>
+                      <tr>
+                        <th>Route</th>
+                        <th>Type</th>
+                        <th>Has forms</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr><td class="mono text-sm">/</td><td>Public</td><td class="muted">No</td></tr>
+                      <tr><td class="mono text-sm">/login</td><td>Auth</td><td>Yes</td></tr>
+                      <tr><td class="mono text-sm">/signup</td><td>Auth</td><td>Yes</td></tr>
+                      <tr><td class="mono text-sm">/dashboard</td><td>Protected</td><td class="muted">No</td></tr>
+                      <tr><td class="mono text-sm">/settings</td><td>Protected</td><td>Yes</td></tr>
+                      <tr><td class="mono text-sm">/checkout</td><td>Protected</td><td>Yes</td></tr>
+                      <tr><td class="mono text-sm">/checkout/confirm</td><td>Protected</td><td class="muted">No</td></tr>
+                      <tr><td class="mono text-sm">/pricing</td><td>Public</td><td class="muted">No</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div class="timeline__item">
+              <div class="timeline__dot timeline__dot--active"></div>
+              <div class="timeline__title">Generating workflows</div>
+              <div class="timeline__desc">
+                Building workflow definitions for discovered routes and interactions...
+              </div>
+              <div class="mt-md stack gap-sm">
+                <div class="row gap-sm p-md" style="background:var(--c-bg);border-radius:var(--r-md);border:1px solid var(--c-border)">
+                  <span class="dot dot--pass"></span>
+                  <span class="text-sm" style="font-weight:500">homepage.yml</span>
+                  <span class="text-xs muted">3 checkpoints &middot; 2 viewports</span>
+                  <span class="badge badge--pass ml-auto">Done</span>
+                </div>
+                <div class="row gap-sm p-md" style="background:var(--c-bg);border-radius:var(--r-md);border:1px solid var(--c-border)">
+                  <span class="dot dot--pass"></span>
+                  <span class="text-sm" style="font-weight:500">login-flow.yml</span>
+                  <span class="text-xs muted">4 checkpoints &middot; 1 viewport</span>
+                  <span class="badge badge--pass ml-auto">Done</span>
+                </div>
+                <div class="row gap-sm p-md" style="background:var(--c-bg);border-radius:var(--r-md);border:1px solid var(--c-border)">
+                  <span class="dot dot--run"></span>
+                  <span class="text-sm" style="font-weight:500">checkout.yml</span>
+                  <span class="text-xs muted">Generating steps...</span>
+                  <span class="badge badge--run ml-auto">Working</span>
+                </div>
+                <div class="row gap-sm p-md" style="background:var(--c-bg);border-radius:var(--r-md);border:1px solid var(--c-border);opacity:.5">
+                  <span class="dot" style="background:var(--c-border)"></span>
+                  <span class="text-sm" style="font-weight:500">dashboard.yml</span>
+                  <span class="text-xs muted">Waiting...</span>
+                  <span class="badge badge--muted ml-auto">Queued</span>
+                </div>
+                <div class="row gap-sm p-md" style="background:var(--c-bg);border-radius:var(--r-md);border:1px solid var(--c-border);opacity:.5">
+                  <span class="dot" style="background:var(--c-border)"></span>
+                  <span class="text-sm" style="font-weight:500">settings.yml</span>
+                  <span class="text-xs muted">Waiting...</span>
+                  <span class="badge badge--muted ml-auto">Queued</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="timeline__item">
+              <div class="timeline__dot timeline__dot--pending"></div>
+              <div class="timeline__title" style="color:var(--c-muted)">Create PR</div>
+              <div class="timeline__desc">
+                Will create a pull request with <span class="mono">.megatest/</span> config files for review
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Preview of generated config -->
+      <div class="card">
+        <div class="card__header">
+          <h3>Generated config preview</h3>
+          <span class="text-xs muted ml-auto">2 of 5 workflows ready</span>
+        </div>
+        <div class="card__body">
+          <pre style="background:var(--c-bg);padding:var(--sp-md);border-radius:var(--r-md);font-family:var(--ff-mono);font-size:var(--fs-sm);color:var(--c-muted);overflow-x:auto;border:1px solid var(--c-border)"><code><span style="color:var(--c-accent)"># .megatest/workflows/homepage.yml</span>
+<span style="color:var(--c-new)">name:</span> Homepage
+<span style="color:var(--c-new)">viewports:</span>
+  - <span style="color:var(--c-text)">1280x720</span>
+  - <span style="color:var(--c-text)">375x812</span>
+<span style="color:var(--c-new)">steps:</span>
+  - <span style="color:var(--c-new)">navigate:</span> <span style="color:var(--c-text)">/</span>
+  - <span style="color:var(--c-new)">screenshot:</span> <span style="color:var(--c-text)">hero-section</span>
+  - <span style="color:var(--c-new)">scroll:</span> <span style="color:var(--c-text)">bottom</span>
+  - <span style="color:var(--c-new)">screenshot:</span> <span style="color:var(--c-text)">footer</span>
+  - <span style="color:var(--c-new)">navigate:</span> <span style="color:var(--c-text)">/pricing</span>
+  - <span style="color:var(--c-new)">screenshot:</span> <span style="color:var(--c-text)">pricing-table</span></code></pre>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script src="js/app.js"></script>
+</body>
+</html>

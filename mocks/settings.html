@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Megatest — Settings</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="sidebar">
+    <div class="sidebar__logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      Megatest
+    </div>
+    <nav class="sidebar__nav">
+      <a class="nav-item" href="index.html">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M6.906.664a1.749 1.749 0 012.188 0l5.25 4.2a.75.75 0 01-.938 1.172L13 5.726V14.5a1.75 1.75 0 01-1.75 1.75h-1.5a.75.75 0 01-.75-.75v-3.5a.75.75 0 00-.75-.75h-1.5a.75.75 0 00-.75.75v3.5a.75.75 0 01-.75.75h-1.5A1.75 1.75 0 013 14.5V5.726l-.406.31a.75.75 0 01-.938-1.172l5.25-4.2z"/></svg>
+        Dashboard
+      </a>
+      <div class="sidebar__section">Projects</div>
+      <a class="nav-item active" href="project.html">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0113.25 16h-9.5A1.75 1.75 0 012 14.25V1.75z"/></svg>
+        acme/webapp
+      </a>
+    </nav>
+    <div class="sidebar__footer row gap-sm">
+      <div class="avatar">JD</div>
+      <div class="stack">
+        <span class="text-sm" style="font-weight:500">Jane Doe</span>
+        <span class="text-xs muted">Acme Inc</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===== Main ===== -->
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar__breadcrumb">
+        <a href="index.html">Dashboard</a>
+        <span style="color:var(--c-border)">/</span>
+        <a href="project.html">acme/webapp</a>
+        <span style="color:var(--c-border)">/</span>
+        <span>Settings</span>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" data-tab="tab-general">General</button>
+      <button class="tab" data-tab="tab-triggers">Triggers</button>
+      <button class="tab" data-tab="tab-secrets">Secrets</button>
+      <button class="tab" data-tab="tab-billing">Billing</button>
+    </div>
+
+    <!-- Tab: General -->
+    <div class="tab-panel" id="tab-general">
+      <div class="page">
+
+        <div class="card mb-lg">
+          <div class="card__header"><h3>Project</h3></div>
+          <div class="card__body">
+            <div class="form-group">
+              <label class="form-label">Repository</label>
+              <input class="form-input" type="text" value="acme/webapp" disabled style="opacity:.6">
+              <span class="form-hint">Connected via GitHub App</span>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Default branch</label>
+              <input class="form-input" type="text" value="main" disabled style="opacity:.6">
+            </div>
+          </div>
+        </div>
+
+        <div class="card mb-lg">
+          <div class="card__header"><h3>Config repository</h3></div>
+          <div class="card__body">
+            <div class="radio-group">
+              <label class="radio-option active">
+                <input type="radio" name="config-repo" checked style="margin-top:3px">
+                <div>
+                  <div class="radio-option__label">Same repository</div>
+                  <div class="radio-option__desc">Store <span class="mono">.megatest/</span> config in the project repository</div>
+                </div>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="config-repo" style="margin-top:3px">
+                <div>
+                  <div class="radio-option__label">Separate repository</div>
+                  <div class="radio-option__desc">Store config in a dedicated repository (useful when you don't have write access to the project repo)</div>
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="card mb-lg">
+          <div class="card__header"><h3>LLM provider</h3></div>
+          <div class="card__body">
+            <div class="form-group">
+              <label class="form-label">Provider</label>
+              <select class="form-input form-select">
+                <option>Anthropic (Claude)</option>
+                <option>OpenAI (GPT-4)</option>
+                <option>Custom (OpenAI-compatible)</option>
+              </select>
+              <span class="form-hint">Used for workflow discovery and route detection</span>
+            </div>
+            <div class="form-group">
+              <label class="form-label">API key</label>
+              <input class="form-input" type="password" value="sk-ant-...redacted" placeholder="sk-ant-...">
+              <span class="form-hint">Stored encrypted. Used only for discovery jobs in this project.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card__header"><h3>Danger zone</h3></div>
+          <div class="card__body">
+            <div class="row between">
+              <div>
+                <div style="font-weight:500">Disconnect project</div>
+                <div class="text-sm muted">Remove this project from Megatest. Baselines and history will be deleted.</div>
+              </div>
+              <button class="btn btn--danger">Disconnect</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Tab: Triggers -->
+    <div class="tab-panel" id="tab-triggers" hidden>
+      <div class="page">
+        <div class="card">
+          <div class="card__header"><h3>Trigger rules</h3></div>
+          <div class="card__body">
+            <p class="text-sm muted mb-lg">Choose when Megatest runs visual tests for this project.</p>
+            <div class="radio-group">
+              <label class="radio-option active">
+                <input type="radio" name="trigger" checked style="margin-top:3px">
+                <div>
+                  <div class="radio-option__label">Pull requests only</div>
+                  <div class="radio-option__desc">Run on PR open, synchronize, and reopen events. Recommended for most projects.</div>
+                </div>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="trigger" style="margin-top:3px">
+                <div>
+                  <div class="radio-option__label">Pull requests + default branch</div>
+                  <div class="radio-option__desc">Also run on pushes to <span class="mono">main</span> to catch direct commits.</div>
+                </div>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="trigger" style="margin-top:3px">
+                <div>
+                  <div class="radio-option__label">All pushes and pull requests</div>
+                  <div class="radio-option__desc">Maximum coverage — every push to any branch triggers a run.</div>
+                </div>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="trigger" style="margin-top:3px">
+                <div>
+                  <div class="radio-option__label">Manual only</div>
+                  <div class="radio-option__desc">Only run when triggered manually from the dashboard.</div>
+                </div>
+              </label>
+            </div>
+          </div>
+          <div class="card__footer">
+            <button class="btn btn--primary">Save trigger rules</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Secrets -->
+    <div class="tab-panel" id="tab-secrets" hidden>
+      <div class="page">
+        <div class="card">
+          <div class="card__header between">
+            <h3>Environment secrets</h3>
+            <button class="btn btn--accent btn--sm">
+              <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14"><path d="M7.75 2a.75.75 0 01.75.75V7h4.25a.75.75 0 010 1.5H8.5v4.25a.75.75 0 01-1.5 0V8.5H2.75a.75.75 0 010-1.5H7V2.75A.75.75 0 017.75 2z"/></svg>
+              Add secret
+            </button>
+          </div>
+          <div class="card__body">
+            <p class="text-sm muted mb-lg">Secrets are injected as environment variables when your app starts during test runs.</p>
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Added</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="mono">DATABASE_URL</td>
+                  <td class="muted">3 days ago</td>
+                  <td style="text-align:right"><button class="btn btn--ghost btn--sm">Remove</button></td>
+                </tr>
+                <tr>
+                  <td class="mono">STRIPE_TEST_KEY</td>
+                  <td class="muted">3 days ago</td>
+                  <td style="text-align:right"><button class="btn btn--ghost btn--sm">Remove</button></td>
+                </tr>
+                <tr>
+                  <td class="mono">NEXTAUTH_SECRET</td>
+                  <td class="muted">3 days ago</td>
+                  <td style="text-align:right"><button class="btn btn--ghost btn--sm">Remove</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Billing -->
+    <div class="tab-panel" id="tab-billing" hidden>
+      <div class="page">
+        <div class="card mb-lg">
+          <div class="card__header"><h3>Usage this month</h3></div>
+          <div class="card__body">
+            <div class="stats">
+              <div class="stat">
+                <span class="stat__value">347</span>
+                <span class="stat__label">Screenshots</span>
+              </div>
+              <div class="stat">
+                <span class="stat__value">24</span>
+                <span class="stat__label">Runs</span>
+              </div>
+              <div class="stat">
+                <span class="stat__value">1</span>
+                <span class="stat__label">Discovery</span>
+              </div>
+            </div>
+            <div class="mt-md">
+              <div class="row between text-sm mb-sm">
+                <span class="muted">347 / 500 free screenshots</span>
+                <span class="muted">69%</span>
+              </div>
+              <div class="progress">
+                <div class="progress__bar progress__bar--pass" style="width:69%"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card__header"><h3>Plan</h3></div>
+          <div class="card__body">
+            <div class="row between">
+              <div>
+                <div style="font-weight:600">Free</div>
+                <div class="text-sm muted">500 screenshots/month &middot; 3 projects &middot; Community support</div>
+              </div>
+              <button class="btn btn--accent">Upgrade to Pro</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<script src="js/app.js"></script>
+</body>
+</html>

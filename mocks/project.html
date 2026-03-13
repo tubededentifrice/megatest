@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Megatest — acme/webapp</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="sidebar">
+    <div class="sidebar__logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      Megatest
+    </div>
+    <nav class="sidebar__nav">
+      <a class="nav-item" href="index.html">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M6.906.664a1.749 1.749 0 012.188 0l5.25 4.2a.75.75 0 01-.938 1.172L13 5.726V14.5a1.75 1.75 0 01-1.75 1.75h-1.5a.75.75 0 01-.75-.75v-3.5a.75.75 0 00-.75-.75h-1.5a.75.75 0 00-.75.75v3.5a.75.75 0 01-.75.75h-1.5A1.75 1.75 0 013 14.5V5.726l-.406.31a.75.75 0 01-.938-1.172l5.25-4.2z"/></svg>
+        Dashboard
+      </a>
+      <div class="sidebar__section">Projects</div>
+      <a class="nav-item active" href="project.html">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0113.25 16h-9.5A1.75 1.75 0 012 14.25V1.75z"/></svg>
+        acme/webapp
+        <span class="nav-item__badge">2</span>
+      </a>
+      <a class="nav-item" href="project.html">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0113.25 16h-9.5A1.75 1.75 0 012 14.25V1.75z"/></svg>
+        acme/marketing
+      </a>
+      <a class="nav-item" href="project.html">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0113.25 16h-9.5A1.75 1.75 0 012 14.25V1.75z"/></svg>
+        acme/docs
+      </a>
+    </nav>
+    <div class="sidebar__footer row gap-sm">
+      <div class="avatar">JD</div>
+      <div class="stack">
+        <span class="text-sm" style="font-weight:500">Jane Doe</span>
+        <span class="text-xs muted">Acme Inc</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===== Main ===== -->
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar__breadcrumb">
+        <a href="index.html">Dashboard</a>
+        <span style="color:var(--c-border)">/</span>
+        <span>acme/webapp</span>
+      </div>
+      <div class="topbar__actions">
+        <button class="btn">
+          <svg viewBox="0 0 16 16" fill="currentColor" width="16" height="16"><path d="M1.5 8a6.5 6.5 0 1113 0 6.5 6.5 0 01-13 0zM8 0a8 8 0 100 16A8 8 0 008 0zm.75 4.75a.75.75 0 00-1.5 0v2.5h-2.5a.75.75 0 000 1.5h2.5v2.5a.75.75 0 001.5 0v-2.5h2.5a.75.75 0 000-1.5h-2.5v-2.5z"/></svg>
+          Trigger run
+        </button>
+        <a href="settings.html" class="btn">
+          <svg viewBox="0 0 16 16" fill="currentColor" width="16" height="16"><path d="M8 0a8.2 8.2 0 011.77.194.75.75 0 01.543.677l.12 1.327a6.3 6.3 0 011.01.59l1.24-.432a.75.75 0 01.828.262A8.166 8.166 0 0114.926 4.7a.75.75 0 01-.284.84l-1.12.895a6.3 6.3 0 010 1.17l1.12.895a.75.75 0 01.284.84 8.166 8.166 0 01-1.414 2.082.75.75 0 01-.828.262l-1.24-.432a6.3 6.3 0 01-1.01.59l-.12 1.327a.75.75 0 01-.543.677 8.2 8.2 0 01-3.54 0 .75.75 0 01-.543-.677l-.12-1.327a6.3 6.3 0 01-1.01-.59l-1.24.432a.75.75 0 01-.828-.262A8.166 8.166 0 011.074 11.3a.75.75 0 01.284-.84l1.12-.895a6.3 6.3 0 010-1.17l-1.12-.895a.75.75 0 01-.284-.84A8.166 8.166 0 012.488 5.58a.75.75 0 01.828-.262l1.24.432a6.3 6.3 0 011.01-.59l.12-1.327A.75.75 0 016.23.194 8.2 8.2 0 018 0zM8 11a3 3 0 100-6 3 3 0 000 6z"/></svg>
+          Settings
+        </a>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" data-tab="tab-runs">
+        <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14"><path d="M1.5 1.75V13.5h13.75a.75.75 0 010 1.5H.75a.75.75 0 01-.75-.75V1.75a.75.75 0 011.5 0zm14.28 2.53l-5.25 5.25a.75.75 0 01-1.06 0L7 7.06 4.28 9.78a.75.75 0 01-1.06-1.06l3.25-3.25a.75.75 0 011.06 0L10 7.94l4.72-4.72a.75.75 0 111.06 1.06z"/></svg>
+        Runs
+        <span class="tab__count">24</span>
+      </button>
+      <button class="tab" data-tab="tab-baselines">
+        <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14"><path d="M16 13.25A1.75 1.75 0 0114.25 15H1.75A1.75 1.75 0 010 13.25V2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5zM1.75 2.5a.25.25 0 00-.25.25v10.5c0 .138.112.25.25.25h12.5a.25.25 0 00.25-.25V2.75a.25.25 0 00-.25-.25H1.75z"/></svg>
+        Baselines
+        <span class="tab__count">16</span>
+      </button>
+      <button class="tab" data-tab="tab-discovery">
+        <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14"><path d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM0 8a8 8 0 1116 0A8 8 0 010 8zm6.5-.25A.75.75 0 017.25 7h1a.75.75 0 01.75.75v2.75h.25a.75.75 0 010 1.5h-2a.75.75 0 010-1.5h.25v-2h-.25a.75.75 0 01-.75-.75zM8 6a1 1 0 110-2 1 1 0 010 2z"/></svg>
+        Discovery
+      </button>
+    </div>
+
+    <!-- Tab: Runs (active) -->
+    <div class="tab-panel" id="tab-runs">
+      <div class="page">
+        <!-- Stats -->
+        <div class="stats mb-lg">
+          <div class="stat stat--pass">
+            <span class="stat__value">14</span>
+            <span class="stat__label">Passed</span>
+          </div>
+          <div class="stat stat--fail">
+            <span class="stat__value">2</span>
+            <span class="stat__label">Failed</span>
+          </div>
+          <div class="stat stat--new">
+            <span class="stat__value">1</span>
+            <span class="stat__label">New</span>
+          </div>
+          <div class="stat">
+            <span class="stat__value">24</span>
+            <span class="stat__label">Total runs</span>
+          </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="filters" style="padding-left:0">
+          <button class="filter-chip active">All</button>
+          <button class="filter-chip">Failed</button>
+          <button class="filter-chip">Passed</button>
+          <button class="filter-chip">Running</button>
+          <div class="search-wrap ml-auto">
+            <svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.5 7a4.499 4.499 0 11-9 0 4.499 4.499 0 019 0zm-.82 4.74a6 6 0 111.06-1.06l3.04 3.04a.75.75 0 11-1.06 1.06l-3.04-3.04z"/></svg>
+            <input class="search-input" type="text" placeholder="Filter by branch...">
+          </div>
+        </div>
+
+        <!-- Run list -->
+        <div class="card">
+          <a class="run-item" href="review.html">
+            <span class="dot dot--fail"></span>
+            <div class="run-item__info">
+              <div class="run-item__title">
+                <span class="mono text-sm">#247</span>
+                PR #42 — Redesign checkout flow
+              </div>
+              <div class="run-item__detail">
+                <span class="mono">feat/checkout-redesign</span> &middot; <span class="mono">a3f9c2d</span> &middot; 12 min ago &middot; 48s
+              </div>
+            </div>
+            <div class="run-item__stats">
+              <span class="run-item__stat" style="color:var(--c-pass)">
+                <span class="dot dot--pass"></span> 14
+              </span>
+              <span class="run-item__stat" style="color:var(--c-fail)">
+                <span class="dot dot--fail"></span> 2
+              </span>
+              <span class="run-item__stat" style="color:var(--c-new)">
+                <span class="dot dot--new"></span> 1
+              </span>
+              <span class="badge badge--fail">Needs review</span>
+            </div>
+          </a>
+
+          <a class="run-item" href="review.html">
+            <span class="dot dot--run"></span>
+            <div class="run-item__info">
+              <div class="run-item__title">
+                <span class="mono text-sm">#246</span>
+                PR #41 — Add dark mode toggle
+              </div>
+              <div class="run-item__detail">
+                <span class="mono">feat/dark-mode</span> &middot; <span class="mono">e7b1d4f</span> &middot; 1 min ago
+              </div>
+            </div>
+            <div class="run-item__stats">
+              <div class="progress" style="width:80px">
+                <div class="progress__bar progress__bar--run" style="width:65%"></div>
+              </div>
+              <span class="badge badge--run">Running</span>
+            </div>
+          </a>
+
+          <a class="run-item" href="review.html">
+            <span class="dot dot--pass"></span>
+            <div class="run-item__info">
+              <div class="run-item__title">
+                <span class="mono text-sm">#245</span>
+                Push to main — Fix header z-index
+              </div>
+              <div class="run-item__detail">
+                <span class="mono">main</span> &middot; <span class="mono">1c4e8a2</span> &middot; 3 hours ago &middot; 42s
+              </div>
+            </div>
+            <div class="run-item__stats">
+              <span class="run-item__stat" style="color:var(--c-pass)">
+                <span class="dot dot--pass"></span> 16
+              </span>
+              <span class="badge badge--pass">Passed</span>
+            </div>
+          </a>
+
+          <a class="run-item" href="review.html">
+            <span class="dot dot--pass"></span>
+            <div class="run-item__info">
+              <div class="run-item__title">
+                <span class="mono text-sm">#244</span>
+                PR #39 — Update pricing page copy
+              </div>
+              <div class="run-item__detail">
+                <span class="mono">fix/pricing-copy</span> &middot; <span class="mono">8d2f1b7</span> &middot; 5 hours ago &middot; 39s
+              </div>
+            </div>
+            <div class="run-item__stats">
+              <span class="run-item__stat" style="color:var(--c-pass)">
+                <span class="dot dot--pass"></span> 16
+              </span>
+              <span class="badge badge--pass">Approved</span>
+            </div>
+          </a>
+
+          <a class="run-item" href="review.html">
+            <span class="dot dot--fail"></span>
+            <div class="run-item__info">
+              <div class="run-item__title">
+                <span class="mono text-sm">#243</span>
+                PR #38 — Sidebar navigation refactor
+              </div>
+              <div class="run-item__detail">
+                <span class="mono">refactor/sidebar</span> &middot; <span class="mono">f4a9e3c</span> &middot; 1 day ago &middot; 51s
+              </div>
+            </div>
+            <div class="run-item__stats">
+              <span class="run-item__stat" style="color:var(--c-pass)">
+                <span class="dot dot--pass"></span> 12
+              </span>
+              <span class="run-item__stat" style="color:var(--c-fail)">
+                <span class="dot dot--fail"></span> 4
+              </span>
+              <span class="badge badge--pass">Approved</span>
+            </div>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Baselines -->
+    <div class="tab-panel" id="tab-baselines" hidden>
+      <div class="page">
+        <div class="card">
+          <div class="card__header">
+            <h3>Active baselines</h3>
+            <span class="text-sm muted ml-auto">16 checkpoints on <span class="mono">main</span></span>
+          </div>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Workflow</th>
+                <th>Checkpoint</th>
+                <th>Viewport</th>
+                <th>Last updated</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Homepage</td>
+                <td class="mono">hero-section</td>
+                <td class="mono">1280x720</td>
+                <td class="muted">2 days ago</td>
+              </tr>
+              <tr>
+                <td>Homepage</td>
+                <td class="mono">hero-section</td>
+                <td class="mono">375x812</td>
+                <td class="muted">2 days ago</td>
+              </tr>
+              <tr>
+                <td>Homepage</td>
+                <td class="mono">footer</td>
+                <td class="mono">1280x720</td>
+                <td class="muted">5 days ago</td>
+              </tr>
+              <tr>
+                <td>Login flow</td>
+                <td class="mono">login-form</td>
+                <td class="mono">1280x720</td>
+                <td class="muted">1 week ago</td>
+              </tr>
+              <tr>
+                <td>Login flow</td>
+                <td class="mono">login-error</td>
+                <td class="mono">1280x720</td>
+                <td class="muted">1 week ago</td>
+              </tr>
+              <tr>
+                <td>Dashboard</td>
+                <td class="mono">empty-state</td>
+                <td class="mono">1280x720</td>
+                <td class="muted">3 days ago</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Discovery -->
+    <div class="tab-panel" id="tab-discovery" hidden>
+      <div class="page">
+        <div class="card">
+          <div class="card__header between">
+            <h3>Workflow discovery</h3>
+            <button class="btn btn--accent btn--sm">
+              <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14"><path d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM0 8a8 8 0 1116 0A8 8 0 010 8z"/><path d="M6.379 5.227A.25.25 0 006 5.442v5.117a.25.25 0 00.379.214l4.264-2.559a.25.25 0 000-.428L6.379 5.227z"/></svg>
+              Re-discover workflows
+            </button>
+          </div>
+          <div class="card__body">
+            <a href="discovery.html" style="text-decoration:none;color:inherit">
+              <div class="row gap-md mb-lg p-md" style="background:var(--c-bg);border-radius:var(--r-md);border:1px solid var(--c-border)">
+                <span class="badge badge--pass">Completed</span>
+                <div class="stack">
+                  <span style="font-weight:500">Initial discovery</span>
+                  <span class="text-sm muted">Discovered 5 workflows, 16 checkpoints &middot; 3 days ago</span>
+                </div>
+                <span class="ml-auto text-sm muted">PR #37 (merged)</span>
+              </div>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<script src="js/app.js"></script>
+</body>
+</html>
