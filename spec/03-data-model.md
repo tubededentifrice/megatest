@@ -18,6 +18,7 @@ CREATE TABLE users (
     github_id           INTEGER NOT NULL UNIQUE,
     github_login        TEXT NOT NULL,             -- username (e.g. "octocat")
     github_name         TEXT,                      -- display name
+    github_email        TEXT,                      -- primary verified email, if available
     github_avatar_url   TEXT,
     github_access_token TEXT NOT NULL,             -- encrypted at rest
     created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -37,8 +38,29 @@ CREATE TABLE github_installations (
     account_login     TEXT NOT NULL,              -- org or user login
     account_id        INTEGER NOT NULL,           -- GitHub's numeric account ID
     permissions       JSON,                       -- permissions granted to the installation
+    status            TEXT NOT NULL DEFAULT 'active', -- active|deleted
     created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at        DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### installation_repositories
+
+Repositories currently accessible through a GitHub App installation. This table
+drives the repo picker in the UI and is maintained from
+`installation.created` / `installation_repositories.*` webhook events.
+
+```sql
+CREATE TABLE installation_repositories (
+    id                TEXT PRIMARY KEY,            -- uuid v4
+    installation_id   TEXT NOT NULL REFERENCES github_installations(id),
+    repo_id           INTEGER NOT NULL,
+    repo_name         TEXT NOT NULL,
+    repo_full_name    TEXT NOT NULL,
+    is_active         BOOLEAN DEFAULT true,
+    created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(installation_id, repo_id)
 );
 ```
 
@@ -54,7 +76,7 @@ CREATE TABLE projects (
     repo_url          TEXT NOT NULL,              -- https clone URL
     repo_id           INTEGER NOT NULL,           -- GitHub's numeric repo ID
     default_branch    TEXT DEFAULT 'main',
-    settings          JSON,                       -- project-level config overrides
+    settings          JSON,                       -- operational settings only (e.g. branch filters, run timeout)
     secrets           JSON,                       -- encrypted project secrets for ${env:VAR}
     is_active         BOOLEAN DEFAULT true,
     created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -71,14 +93,14 @@ One execution triggered by a commit push or pull request event. A run walks thro
 CREATE TABLE runs (
     id                TEXT PRIMARY KEY,            -- uuid v4
     project_id        TEXT NOT NULL REFERENCES projects(id),
-    trigger           TEXT NOT NULL,              -- "push" | "pull_request"
+    trigger           TEXT NOT NULL,              -- "push" | "pull_request" | "manual"
     branch            TEXT NOT NULL,              -- head branch
     commit_sha        TEXT NOT NULL,
     base_branch       TEXT,                       -- target branch (for PRs)
     base_sha          TEXT,                       -- target SHA (for PRs)
     pr_number         INTEGER,
-    status            TEXT DEFAULT 'queued',      -- queued|cloning|setting_up|running|comparing|done|failed|cancelled
-    result            TEXT,                       -- pass|fail|error (set when status = done)
+    status            TEXT DEFAULT 'queued',      -- queued|cloning|setting_up|running|comparing|completed|failed|cancelled
+    result            TEXT,                       -- pass|fail|error (set when status = completed)
     error_message     TEXT,
     config_snapshot   JSON,                       -- parsed .megatest/ config at time of run
     started_at        DATETIME,
@@ -90,7 +112,7 @@ CREATE TABLE runs (
 Status lifecycle:
 
 ```
-queued -> cloning -> setting_up -> running -> comparing -> done
+queued -> cloning -> setting_up -> running -> comparing -> completed
                                                         -> failed
 Any state -----------------------------------------> cancelled
 ```
@@ -107,6 +129,7 @@ CREATE TABLE checkpoints (
     name                TEXT NOT NULL,             -- screenshot/checkpoint name
     viewport            TEXT NOT NULL,             -- viewport name or "WxH" (e.g. "desktop" or "1280x720")
     status              TEXT NOT NULL,             -- pass|fail|new|error
+    diff_reason         TEXT,                      -- e.g. "dimension_mismatch"
     diff_percent        REAL,                     -- percentage of pixels that differ
     threshold           REAL NOT NULL,            -- configured threshold at time of comparison
     pixel_count         INTEGER,                  -- total pixels in image
@@ -157,6 +180,54 @@ CREATE TABLE approvals (
 );
 ```
 
+The latest approval row for a checkpoint is the source of truth for its
+current review state:
+
+- No approval rows: review state = `pending`
+- Latest action = `approve`: review state = `approved`
+- Latest action = `reject`: review state = `rejected`
+
+Execution status on `checkpoints.status` remains immutable (`pass|fail|new|error`)
+and never changes to `approved` or `rejected`.
+
+### discoveries
+
+Asynchronous discovery jobs and their generated outputs.
+
+```sql
+CREATE TABLE discoveries (
+    id                TEXT PRIMARY KEY,            -- uuid v4
+    project_id        TEXT NOT NULL REFERENCES projects(id),
+    branch            TEXT NOT NULL,
+    status            TEXT NOT NULL,              -- queued|running|completed|failed
+    error_phase       TEXT,
+    error_message     TEXT,
+    report            JSON,                       -- discovery report metadata
+    workflows         JSON,                       -- generated workflow summaries
+    config_files      JSON,                       -- generated file contents keyed by relative .megatest path
+    created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+    completed_at      DATETIME
+);
+```
+
+### webhook_deliveries
+
+Webhook idempotency and delivery audit. Every GitHub delivery UUID is recorded
+before side effects are committed.
+
+```sql
+CREATE TABLE webhook_deliveries (
+    id                TEXT PRIMARY KEY,            -- uuid v4
+    provider          TEXT NOT NULL,              -- "github"
+    delivery_id       TEXT NOT NULL,              -- X-GitHub-Delivery
+    event_name        TEXT NOT NULL,
+    processed_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    outcome           TEXT NOT NULL,              -- processed|ignored|failed
+    error_message     TEXT,
+    UNIQUE(provider, delivery_id)
+);
+```
+
 ---
 
 ## Indexes
@@ -175,6 +246,15 @@ CREATE INDEX idx_checkpoints_run_id ON checkpoints(run_id);
 
 -- Look up baselines for a project + branch (used during comparison phase)
 CREATE INDEX idx_baselines_project_branch ON baselines(project_id, branch);
+
+-- Resolve current review state quickly
+CREATE INDEX idx_approvals_checkpoint_created_at ON approvals(checkpoint_id, created_at);
+
+-- Repo picker
+CREATE INDEX idx_installation_repositories_installation_id ON installation_repositories(installation_id, is_active);
+
+-- Discovery history
+CREATE INDEX idx_discoveries_project_created_at ON discoveries(project_id, created_at);
 ```
 
 ---
@@ -228,7 +308,7 @@ function resolve_baseline(project, run, checkpoint):
 
 When a pull request is merged (detected via `pull_request.closed` webhook with `merged = true`):
 
-1. Find the most recent completed run for that PR (`project_id`, `pr_number`, `status = 'done'`).
+1. Find the most recent completed run for that PR (`project_id`, `pr_number`, `status = 'completed'`).
 2. For each checkpoint in that run that was **approved** (has a corresponding entry in `approvals` with `action = 'approve'`):
    - Upsert the `baselines` row for `(project_id, default_branch, workflow, checkpoint, viewport)` with the actual image from the approved checkpoint.
    - The `approved_from` and `approved_by` fields are carried forward from the approval record.

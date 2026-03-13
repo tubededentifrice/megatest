@@ -168,39 +168,36 @@ After exploration and flow detection, the agent generates the `.megatest/` direc
 
 **config.yml** -- generated from setup detection (Section 4):
 ```yaml
-install:
-  - npm ci
-
-serve:
-  cmd: npm run dev
-  ready: http://localhost:3000
-
-viewport:
-  width: 1280
-  height: 800
-
+version: "1"
+setup:
+  install:
+    - npm ci
+  serve:
+    cmd: npm run dev
+    ready: http://localhost:3000
 defaults:
-  wait_after_navigate: 1000
+  viewport: { width: 1280, height: 800 }
+  waitAfterNavigation: "1000"
 ```
 
 **workflows/{name}.yml** -- one per discovered flow:
 ```yaml
-name: User Login
+name: login
 description: Tests the login flow with email and password
-tags: [auth, critical]
 steps:
-  - navigate: /login
+  - open: http://localhost:3000/login
   - wait: 500
   - screenshot: login-page-empty
   - fill:
-      locator: { label: "Email" }
-      value: "test@example.com"
+      label: "Email"
+      text: "${TEST_USER}"
   - fill:
-      locator: { label: "Password" }
-      value: "password123"
+      label: "Password"
+      text: "${TEST_PASS}"
   - screenshot: login-page-filled
   - click:
-      locator: { role: button, name: "Sign in" }
+      role: "button"
+      name: "Sign in"
   - wait: 1000
   - screenshot: login-success-dashboard
 ```
@@ -208,26 +205,28 @@ steps:
 **includes/{name}.yml** -- reusable step sequences:
 ```yaml
 # includes/login.yml
+name: login
 steps:
-  - navigate: /login
+  - open: http://localhost:3000/login
   - fill:
-      locator: { label: "Email" }
-      value: "test@example.com"
+      label: "Email"
+      text: "${TEST_USER}"
   - fill:
-      locator: { label: "Password" }
-      value: "password123"
+      label: "Password"
+      text: "${TEST_PASS}"
   - click:
-      locator: { role: button, name: "Sign in" }
+      role: "button"
+      name: "Sign in"
   - wait: 1000
 ```
 
 Workflows that need authentication reference the include:
 ```yaml
-name: Dashboard
+name: dashboard
 description: Screenshots of the main dashboard after login
 steps:
   - include: login
-  - navigate: /dashboard
+  - open: http://localhost:3000/dashboard
   - wait: 500
   - screenshot: dashboard-main
 ```
@@ -414,10 +413,10 @@ Response when completed (200 OK):
       }
     ],
     "config_files": {
-      "config.yml": "install:\n  - npm ci\n\nserve:\n  cmd: npm run dev\n  ready: http://localhost:3000\n...",
-      "workflows/homepage.yml": "name: Homepage\n...",
-      "workflows/login.yml": "name: User Login\n...",
-      "includes/login.yml": "steps:\n  - navigate: /login\n..."
+      "config.yml": "version: \"1\"\nsetup:\n  install:\n    - npm ci\n  serve:\n    cmd: npm run dev\n    ready: http://localhost:3000\n...",
+      "workflows/homepage.yml": "name: homepage\n...",
+      "workflows/login.yml": "name: login\n...",
+      "includes/login.yml": "name: login\nsteps:\n  - open: http://localhost:3000/login\n..."
     },
     "created_at": "2026-03-13T10:00:00Z",
     "completed_at": "2026-03-13T10:02:15Z"
@@ -490,10 +489,10 @@ If `create_pr: false`:
 ```json
 {
   "files": {
-    ".megatest/config.yml": "install:\n  - npm ci\n...",
-    ".megatest/workflows/homepage.yml": "name: Homepage\n...",
-    ".megatest/workflows/login.yml": "name: User Login\n...",
-    ".megatest/includes/login.yml": "steps:\n  - navigate: /login\n..."
+    ".megatest/config.yml": "version: \"1\"\nsetup:\n  install:\n    - npm ci\n...",
+    ".megatest/workflows/homepage.yml": "name: homepage\n...",
+    ".megatest/workflows/login.yml": "name: login\n...",
+    ".megatest/includes/login.yml": "name: login\nsteps:\n  - open: http://localhost:3000/login\n..."
   }
 }
 ```
@@ -773,7 +772,16 @@ For these cases, the agent:
 - Generates workflow files for public pages only
 - Recommends that the user provide auth credentials or session tokens in the config
 
-If the project provides test credentials in the config (e.g., in `config.yml` under an `auth` key), the agent uses them during discovery.
+If the project provides test credentials via Megatest project secrets, the
+discovery agent may reference them through schema-valid variables such as:
+
+```yaml
+variables:
+  TEST_USER: "${env:MEGATEST_TEST_USER}"
+  TEST_PASS: "${env:MEGATEST_TEST_PASS}"
+```
+
+Discovery MUST NOT commit raw secret values into generated `.megatest` files.
 
 ### Single-Page Applications
 

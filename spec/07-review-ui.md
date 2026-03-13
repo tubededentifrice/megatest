@@ -47,10 +47,10 @@ Requires login. Unauthenticated users are redirected to `/auth/github`.
 │  ┌────────────┬──────────┬──────────┬────────┬─────────────────┐   │
 │  │ Project    │ Branch   │ Status   │ Result │ Time            │   │
 │  ├────────────┼──────────┼──────────┼────────┼─────────────────┤   │
-│  │ web-app    │ main     │ finished │ passed │ 2 min ago       │   │
-│  │ mktg       │ feat/cta │ finished │ failed │ 18 min ago      │   │
-│  │ docs       │ main     │ finished │ passed │ 1 hour ago      │   │
-│  │ web-app    │ fix/nav  │ finished │ passed │ 2 hours ago     │   │
+│  │ web-app    │ main     │ completed │ pass  │ 2 min ago       │   │
+│  │ mktg       │ feat/cta │ completed │ fail  │ 18 min ago      │   │
+│  │ docs       │ main     │ completed │ pass  │ 1 hour ago      │   │
+│  │ web-app    │ fix/nav  │ completed │ pass  │ 2 hours ago     │   │
 │  │ ...        │          │          │        │                 │   │
 │  └────────────┴──────────┴──────────┴────────┴─────────────────┘   │
 │  Shows last 10 runs across all projects.                            │
@@ -275,9 +275,9 @@ approve action.
 ```
 
 - **All**: shows every checkpoint (default)
-- **Failed**: shows only checkpoints with `result = failed`
-- **New**: shows only checkpoints with `result = new` (no baseline existed)
-- **Passed**: shows only checkpoints with `result = passed`
+- **Failed**: shows only checkpoints with `status = fail`
+- **New**: shows only checkpoints with `status = new` (no baseline existed)
+- **Passed**: shows only checkpoints with `status = pass`
 - Each tab shows a count in parentheses
 - Active tab is visually highlighted (underline or filled background)
 - **Approve All** button is only visible when there are unapproved failed or
@@ -533,6 +533,9 @@ The selected mode persists in `sessionStorage` so refreshing retains the choice.
 
 ## 3. Approval Workflow
 
+The checkpoint card may show a derived review badge (`APPROVED` or `REJECTED`)
+after an action, but the underlying execution status remains `fail` or `new`.
+
 ### 3.1 Single checkpoint approval
 
 **User action:** Click `[Approve]` on a checkpoint card.
@@ -550,10 +553,10 @@ The selected mode persists in `sessionStorage` so refreshing retains the choice.
 3. On error:
    - Toast notification with error message
    - Button returns to its original state
-4. If all checkpoints in the run are now passed or approved:
+4. If all reviewable checkpoints in the run are now approved:
    - GitHub commit status is updated to `success`
    - A success banner appears at the top of the page:
-     "All checkpoints approved. Commit status updated to success."
+     "All reviewable checkpoints approved. Commit status updated to success."
 
 ### 3.2 Single checkpoint rejection
 
@@ -596,12 +599,12 @@ The selected mode persists in `sessionStorage` so refreshing retains the choice.
 **Behavior:**
 1. Dialog shows a progress indicator
 2. On success:
-   - All failed and new checkpoints change to `APPROVED`
+   - All failed and new checkpoints receive the derived review badge `APPROVED`
    - All cards collapse
    - Filter counts update
    - All corresponding baselines are updated
    - GitHub commit status is updated to `success`
-   - Success banner: "All checkpoints approved. Commit status updated."
+   - Success banner: "All reviewable checkpoints approved. Commit status updated."
    - `[Approve All]` button disappears (nothing left to approve)
 3. On error:
    - Toast notification; any partially-approved checkpoints reflect their
@@ -618,12 +621,11 @@ The selected mode persists in `sessionStorage` so refreshing retains the choice.
 | Approved | Green       | check| Collapsed  | (expand to view)      |
 | Rejected | Red         | X    | Expanded   | Approve               |
 
-When all checkpoints are resolved (all passed, approved, or rejected with at
-least none still in failed/new state requiring action), a banner appears:
+When all reviewable checkpoints have been approved, a banner appears:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  ✓  All checkpoints resolved. Commit status: success.          │
+│  ✓  All reviewable checkpoints approved. Commit status: success.│
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -725,8 +727,8 @@ updates so the reviewer sees checkpoints appear as they complete.
 - Poll interval: **5 seconds**
 - Endpoint: `GET /api/v1/runs/:runId` (returns run status and all checkpoints)
 - Polling starts automatically when the page loads and the run status is not
-  `finished` or `failed`
-- Polling stops when the run reaches a terminal state (`finished` or `failed`)
+  `completed`, `failed`, or `cancelled`
+- Polling stops when the run reaches a terminal state (`completed`, `failed`, or `cancelled`)
 
 ### Update behavior
 
@@ -743,7 +745,7 @@ updates so the reviewer sees checkpoints appear as they complete.
    ```
    The progress fraction updates with each poll.
 
-4. **Run completion:** When the run reaches `finished`:
+4. **Run completion:** When the run reaches `completed`:
    - The running indicator is replaced by the final status badge
    - A brief "Run complete" toast appears
    - Polling stops
@@ -912,9 +914,9 @@ guidelines for consistency:
 2. **Batch reject?** The spec includes "Approve All" but no "Reject All". Is
    this needed? Rejecting all seems like an unusual workflow.
 
-3. **Comment on checkpoint?** Should reviewers be able to leave a comment on
-   individual checkpoints explaining why they approved/rejected? This would be
-   useful for team communication but adds complexity.
+3. **Expose approval comments in UI?** The API supports optional comments on
+   approve/reject actions. The remaining question is whether the MVP UI should
+   expose an input for them or defer that until later.
 
 4. **Notification preferences?** Should users be able to configure when they
    receive GitHub notifications vs. relying on the PR comment alone?

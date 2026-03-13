@@ -110,17 +110,22 @@ Discovery Agent Flow:
 - Semantic locators (`find testid`, `find role`, `find text`, `find label`) map naturally to how an AI agent reasons about a page, making Discovery Agent output more robust.
 - Element refs (`@e1`, `@e2`) from snapshots provide a stable addressing scheme within a session.
 - Single statically-linked binary, no Node.js browser dependency management.
-- Installed globally on the worker host -- not bundled per-project.
+- Installed in the worker runtime environment -- either on the host in a
+  bare-metal deployment or inside the dedicated `worker` service image in a
+  containerized deployment.
 
 ### 4.2 Docker per run for worker isolation
 
 User application code is untrusted. Each run gets a fresh Docker container that:
 
 - Is destroyed after the run completes (no state leakage between runs).
-- Has no network access except the exposed port on localhost.
+- Is not reachable from the public network.
 - Runs with resource limits (CPU, memory, timeout).
 
-`agent-browser` and Chromium run on the **host**, not inside the container. The container only runs the user's app server and exposes a port.
+`agent-browser` and Chromium run alongside the worker process, not inside the
+user app container. In a bare-metal deployment they run on the host; in Docker
+Compose they run inside the `worker` service container. The user app container
+joins a per-run Docker network that is only reachable from the worker runtime.
 
 ### 4.3 pixelmatch for image diffing
 
@@ -165,7 +170,9 @@ The Web UI is served directly by the Fastify API server (no separate frontend de
 
 ## 5. Deployment Model
 
-Self-hosted deployment uses Docker Compose with three services.
+Self-hosted deployment uses Docker Compose with three long-lived services. The
+`worker` service image includes `agent-browser` and Chromium so the runtime is
+self-contained.
 
 ### 5.1 docker-compose.yml
 
@@ -179,7 +186,7 @@ services:
     ports:
       - "${API_PORT:-3000}:3000"
     environment:
-      - DATABASE_URL=${DATABASE_URL:-sqlite:./data/megatest.db}
+      - DATABASE_URL=${DATABASE_URL:-sqlite:/data/megatest.db}
       - REDIS_URL=redis://redis:6379
       - GITHUB_APP_ID=${GITHUB_APP_ID}
       - GITHUB_PRIVATE_KEY=${GITHUB_PRIVATE_KEY}
@@ -194,6 +201,7 @@ services:
       - S3_SECRET_KEY=${S3_SECRET_KEY:-}
       - SESSION_SECRET=${SESSION_SECRET}
       - BASE_URL=${BASE_URL:-http://localhost:3000}
+      - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-false}
     volumes:
       - data:/data
     depends_on:
@@ -203,7 +211,7 @@ services:
     build: .
     command: node worker/index.mjs
     environment:
-      - DATABASE_URL=${DATABASE_URL:-sqlite:./data/megatest.db}
+      - DATABASE_URL=${DATABASE_URL:-sqlite:/data/megatest.db}
       - REDIS_URL=redis://redis:6379
       - STORAGE_BACKEND=${STORAGE_BACKEND:-local}
       - STORAGE_PATH=/data/storage
@@ -242,7 +250,7 @@ volumes:
 | `SESSION_SECRET` | Yes | -- | Secret for signing session cookies |
 | `BASE_URL` | No | `http://localhost:3000` | Public URL of the Megatest instance |
 | `API_PORT` | No | `3000` | Port the API server listens on |
-| `DATABASE_URL` | No | `sqlite:./data/megatest.db` | Database connection string. Use `postgresql://...` for PG. |
+| `DATABASE_URL` | No | `sqlite:/data/megatest.db` | Database connection string. Use `postgresql://...` for PG. |
 | `REDIS_URL` | No | `redis://redis:6379` | Redis connection URL |
 | `STORAGE_BACKEND` | No | `local` | `local` or `s3` |
 | `STORAGE_PATH` | No | `/data/storage` | Local filesystem path for screenshots (when backend=local) |
@@ -252,46 +260,54 @@ volumes:
 | `S3_SECRET_KEY` | No | -- | S3 secret key |
 | `WORKER_CONCURRENCY` | No | `2` | Max parallel test runs per worker |
 | `DOCKER_HOST` | No | `unix:///var/run/docker.sock` | Docker daemon socket |
-| `AGENT_BROWSER_PATH` | No | `/usr/local/bin/agent-browser` | Path to agent-browser binary on host |
+| `AGENT_BROWSER_PATH` | No | `/usr/local/bin/agent-browser` | Path to the agent-browser binary in the worker runtime |
+| `SESSION_COOKIE_SECURE` | No | `false` on localhost | Set `true` behind HTTPS. Allows local self-hosted login on `http://localhost`. |
 
 ---
 
 ## 6. Network Topology
 
-The critical network relationship is between `agent-browser` (on the worker host) and the user's application (inside a Docker container).
+The critical network relationship is between the worker runtime
+(`agent-browser` + Chromium + worker process) and the user's application
+container.
 
 ```
-Worker Host
+Worker Runtime (host process or worker service container)
 ├── agent-browser process
 │   └── controls embedded Chromium
-│       └── navigates to http://127.0.0.1:{DYNAMIC_PORT}
+│       └── navigates to http://megatest-run-{id}:{APP_PORT}
 │
-├── Docker Container (--network=host is NOT used)
-│   ├── User app server (e.g., Next.js on port 3000 inside container)
-│   └── Container port 3000 → mapped to host 127.0.0.1:{DYNAMIC_PORT}
+├── Per-run Docker network
+│   ├── worker runtime joined as client
+│   └── user app container joined as server
 │
-└── No external network access from container
+└── User app container
+    └── App server listening on {APP_PORT}
 ```
 
 ### Flow
 
-1. Worker selects an unused host port (e.g., `47321`) from an ephemeral range.
-2. Worker starts the Docker container with `-p 127.0.0.1:47321:3000` (binding only to loopback -- the user app is never exposed to the network).
-3. Worker waits for a health check on `http://127.0.0.1:47321` to confirm the app is ready.
-4. Worker launches `agent-browser` pointing at `http://127.0.0.1:47321`.
+1. Worker creates a dedicated Docker bridge network for the run.
+2. Worker starts the user app container on that network with a stable alias
+   such as `megatest-run-{id}`.
+3. Worker waits for a health check on the configured `serve.ready` URL,
+   rewritten to the container alias on the run network.
+4. Worker launches `agent-browser` pointing at the rewritten URL.
 5. `agent-browser` executes the steps from `.megatest/` config: navigating pages, taking snapshots, capturing screenshots.
-6. On completion (or timeout), the worker stops and removes the Docker container.
-
-### Port Allocation
-
-Each concurrent run gets a unique port. The worker maintains a simple port pool (e.g., `47300-47399` for `WORKER_CONCURRENCY=2` gives ample headroom). Ports are released back to the pool when the container is destroyed.
+6. On completion (or timeout), the worker removes the container and the per-run
+   network.
 
 ### Security Boundaries
 
 | Boundary | Mechanism |
 |---|---|
-| User code cannot reach the internet | Container started with `--network=none` + a port publish on loopback only (Docker allows `-p` with `--network=none` is invalid, so a custom bridge with no external routing is used) |
-| User code cannot reach other containers | Each run uses its own isolated bridge network |
-| User code cannot reach host services | Loopback binding is one-directional; the container's network namespace does not include the host's loopback |
-| agent-browser cannot be hijacked | It connects outbound to the container port; no inbound listening port is exposed |
+| User code cannot accept public inbound traffic | The app container is attached only to a per-run private Docker network |
+| User code cannot reach other runs | Each run uses its own isolated bridge network |
+| Worker/browser is isolated from user filesystem | User code runs in a separate container with only the mounted repo path |
+| agent-browser cannot be hijacked | It connects outbound to the app container; no public listener is exposed |
 | Runs are ephemeral | Container is `--rm`; filesystem is destroyed on exit |
+
+MVP note: outbound egress from the app container is allowed during setup and
+dependency installation so common commands such as `apt-get`, `npm ci`, and
+`pip install` work. A hardened no-egress mode is a future enhancement rather
+than an MVP guarantee.

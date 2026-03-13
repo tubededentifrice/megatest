@@ -1,6 +1,10 @@
 # 05 - Worker Execution
 
-The worker is the most complex component of Megatest. It consumes jobs from a BullMQ queue, spins up isolated Docker containers for the user's application, drives a headless browser via agent-browser on the worker host, performs pixel-level screenshot comparison with pixelmatch, and reports results back through the API and GitHub.
+The worker is the most complex component of Megatest. It consumes jobs from a
+BullMQ queue, spins up isolated Docker containers for the user's application,
+drives a headless browser via `agent-browser` in the worker runtime
+environment, performs pixel-level screenshot comparison with `pixelmatch`, and
+reports results back through the API and GitHub.
 
 ---
 
@@ -54,15 +58,17 @@ Infrastructure failures are distinguished from test failures by error type. The 
 
 ## 2. Docker Isolation Model
 
-Every run executes inside a fresh Docker container. The container runs the user's application (clone, install, dev server). The browser and comparison logic run on the worker host, outside the container.
+Every run executes inside a fresh Docker container. The container runs the
+user's application (clone, install, dev server). The browser and comparison
+logic run alongside the worker process, outside the user app container.
 
 ### Architecture
 
 ```
 +-----------------------------+     +-------------------------+
-| Worker Host                 |     | Docker Container        |
+| Worker Runtime              |     | Docker Container        |
 |                             |     |                         |
-| agent-browser --- http://localhost:PORT ---> dev server     |
+| agent-browser --- http://megatest-run:PORT ---> dev server |
 |   (Chromium)                |     |   (npm run dev)         |
 |                             |     |                         |
 | Worker process              |     |                         |
@@ -72,7 +78,10 @@ Every run executes inside a fresh Docker container. The container runs the user'
 +-----------------------------+     +-------------------------+
 ```
 
-agent-browser and Chromium run on the **worker host**, not inside the container. The dev server inside the container exposes its port, which is mapped to a random available port on the host. agent-browser connects to `http://localhost:{hostPort}`.
+`agent-browser` and Chromium run alongside the worker process, not inside the
+user app container. The worker creates a per-run Docker bridge network and
+attaches the app container with a stable alias. `agent-browser` connects to the
+rewritten `serve.ready` URL on that private network.
 
 ### Base Image
 
@@ -94,9 +103,6 @@ const container = await docker.createContainer({
   WorkingDir: '/app',
   HostConfig: {
     Binds: [`${repoDir}:/app:rw`],  // Mount cloned repo
-    PortBindings: {
-      [`${servePort}/tcp`]: [{ HostPort: '0' }],  // Random host port
-    },
     Memory: 2 * 1024 * 1024 * 1024, // 2 GB RAM
     NanoCpus: 2_000_000_000,         // 2 CPU cores
     DiskQuota: 10 * 1024 * 1024 * 1024, // 10 GB disk
@@ -113,7 +119,7 @@ const container = await docker.createContainer({
 | RAM | 2 GB |
 | CPU | 2 cores |
 | Disk | 10 GB |
-| Network | Bridge mode, only the serve port is exposed |
+| Network | Dedicated bridge network per run |
 
 ### Container Lifecycle
 
@@ -149,7 +155,12 @@ Steps:
      https://x-access-token:{token}@github.com/{owner}/{repo}.git \
      /tmp/megatest-{runId}/repo
    ```
-4. Verify that `HEAD` matches `commitSha`. If not (e.g., branch was force-pushed between queue and execution), abort with an error.
+4. Verify that `HEAD` matches `commitSha`. If not (e.g., branch was force-pushed between queue and execution), fetch the exact SHA and check it out:
+   ```
+   git fetch --depth=1 origin {commitSha}
+   git checkout {commitSha}
+   ```
+   Abort only if the SHA cannot be fetched.
 
 The installation token is short-lived (1 hour) and scoped to the repository. It is never written to disk or passed into the Docker container.
 
@@ -186,15 +197,17 @@ Build or pull the base image, create and configure the container, run setup comm
 
 1. **Pull base image** (if not cached locally). Timeout: 2 minutes.
 
-2. **Create container** with:
+2. **Create a per-run Docker network** and **create container** with:
    - Repo directory (`/tmp/megatest-{runId}/repo`) mounted at `/app`.
-   - Port mapping: the port specified in `serve.port` inside the container mapped to a random available host port.
+   - Network alias: `megatest-run-{runId}`.
    - Resource limits (see section 2).
    - Environment variables: merge of `serve.env` values and project secrets.
 
 3. **Start container.**
 
-4. **Resolve the mapped host port** by inspecting the container's network settings. Store as `hostPort` for later use by agent-browser.
+4. **Resolve the app URL** by rewriting `setup.serve.ready` from
+   `http://localhost:{port}` to
+   `http://megatest-run-{runId}:{port}` on the per-run network.
 
 5. **Run `setup.system` commands** (if any) -- executed as root inside the container via `container.exec()`. These typically install system-level dependencies (e.g., `apt-get install -y libvips`). Each command runs sequentially; a non-zero exit code aborts the run.
 
@@ -203,7 +216,8 @@ Build or pull the base image, create and configure the container, run setup comm
 7. **Start `serve.cmd`** in background -- executed as the `app` user via `container.exec()` with `Detach: true`. The exec ID is stored so its logs can be captured if the server fails to start.
 
 8. **Poll `serve.ready` URL** until it responds with HTTP 200:
-   - The URL from config (e.g., `http://localhost:3000`) is rewritten to use the host port: `http://localhost:{hostPort}`.
+   - The URL from config (e.g., `http://localhost:3000`) is rewritten to the
+     run-network alias: `http://megatest-run-{runId}:3000`.
    - Poll interval: 1 second.
    - Timeout: `serve.timeout` from config, default 120 seconds.
    - On timeout: capture the last 50 lines of serve.cmd output and include in the error message ("Server failed to start within {timeout}s").
@@ -214,10 +228,12 @@ Build or pull the base image, create and configure the container, run setup comm
 
 Download baseline screenshots to compare against.
 
-**Baseline resolution logic:**
+**Baseline resolution logic:** use the algorithm from spec 03.
 
-- **For PR runs** (`baseBranch` is set): query the database for the most recent approved baselines where `project_id = {projectId}` AND `branch = {baseBranch}`.
-- **For push runs** (`baseBranch` is null): query for the most recent approved baselines where `project_id = {projectId}` AND `branch = {branch}`.
+- **For PR runs**: query for baselines on `baseBranch`.
+- **For pushes to the default branch**: query for baselines on the same branch.
+- **For pushes to a non-default branch**: query for baselines on the same
+  branch first, then fall back to the project's default branch.
 
 Baselines are identified by the composite key: `(project_id, branch, workflow_name, checkpoint_name, viewport)`.
 
@@ -227,11 +243,13 @@ Baselines are identified by the composite key: `(project_id, branch, workflow_na
 /tmp/megatest-{runId}/baselines/{workflow}/{checkpointName}/{viewport}.png
 ```
 
-If no baselines exist (first run on this branch, or first run ever), the directory is empty. All screenshots will be classified as "new".
+If no baselines exist after applying the full resolution algorithm, the
+checkpoint is classified as `new`.
 
 ### 3.5 Execute Workflows
 
-This is the core test execution phase. Each workflow is run against each configured viewport. Workflow/viewport pairs may execute in parallel.
+This is the core test execution phase. Each workflow is run against each
+configured viewport. Workflow/viewport pairs may execute in parallel.
 
 **Concurrency:** Up to 3 workflow/viewport pairs run concurrently (default). Each pair gets its own agent-browser session with its own Chromium instance.
 
@@ -256,38 +274,49 @@ This is the core test execution phase. Each workflow is run against each configu
 
    | Step Type | agent-browser Command |
    |-----------|----------------------|
-   | `goto: {path}` | `navigate http://localhost:{hostPort}{path}` |
-   | `find: {locator}` | `find {locatorType} {locatorValue}` |
-   | `click: {locator}` | `find {locatorType} {locatorValue}` then `click` |
-   | `type: {locator}` with `text:` | `find {locatorType} {locatorValue}` then `type {text}` |
-   | `select: {locator}` with `value:` | `find {locatorType} {locatorValue}` then `select {value}` |
-   | `hover: {locator}` | `find {locatorType} {locatorValue}` then `hover` |
-   | `wait: {ms}` | `wait {ms}` |
-   | `waitFor: {locator}` | `wait-for {locatorType} {locatorValue}` with timeout |
-   | `screenshot: {name}` | `screenshot {outputPath}` |
-   | `include: {name}` | (resolved during config parsing, not a runtime step) |
+   | `open: <url>` | `open <url>` |
+   | `click: <locator>` | `find ...` then `click` |
+   | `fill: <locator+text>` | `find ...` then `fill {text}` |
+   | `type: <locator+text>` | `find ...` then `type {text}` |
+   | `select: <locator+value>` | `find ...` then `select {value}` |
+   | `hover: <locator>` | `find ...` then `hover` |
+   | `wait: <condition>` | `wait ...` |
+   | `screenshot: <name|config>` | `screenshot {outputPath}` |
+   | `scroll: <direction>` | `scroll ...` |
+   | `press: <key>` | `press <key>` |
+   | `eval: <javascript>` | `eval <javascript>` |
+   | `include: <name>` | (resolved during config parsing, not a runtime step) |
+   | `set-viewport: <viewport>` | `set viewport <width> <height>` |
 
    **Semantic locators** are resolved from the step config to agent-browser `find` subcommands:
 
-   | Locator Prefix | agent-browser find type |
-   |---------------|------------------------|
-   | `testid:` | `find testid {value}` |
-   | `role:` | `find role {value}` |
-   | `text:` | `find text {value}` |
-   | `label:` | `find label {value}` |
-   | `css:` | `find css {value}` |
+   | Locator key | agent-browser find type |
+   |------------|-------------------------|
+   | `testid` | `find testid {value}` |
+   | `role` (+ optional `name`) | `find role {value}` |
+   | `text` | `find text {value}` |
+   | `label` | `find label {value}` |
+   | `placeholder` | `find placeholder {value}` |
+   | `css` | `find first {value}` |
+   | `nth` | `find nth {index} {selector}` |
 
-   **Execution:** Each command is run via `child_process.execFile('agent-browser', args)` with a per-step timeout (default 30s, configurable via `defaults.timeout`).
+   **Execution:** Each command is run via
+   `child_process.execFile('agent-browser', args)` with a per-step timeout
+   (default 30s, configurable via `defaults.timeout`).
 
    **Screenshot steps:**
    - Output path: `/tmp/megatest-{runId}/screenshots/{workflow}/{name}/{viewport}.png`
    - If `mode: full`, append `--full` flag to the screenshot command.
-   - The screenshot file is written by agent-browser directly to the host filesystem (not inside the container).
+   - If the screenshot config includes `selector`, capture that element rather
+     than the full page.
+   - The screenshot file is written by agent-browser directly to the worker
+     runtime filesystem (not inside the user app container).
 
    **Step failure handling:**
    - If a step fails (non-zero exit, timeout), record the error on the step.
    - Default behavior: abort the remaining steps in this workflow/viewport pair.
-   - If the step has `continueOnError: true`: record the error and continue to the next step.
+   - The config DSL does not support per-step `continueOnError` in schema v1.
+     Recovery is therefore handled at the workflow/runner level, not in YAML.
 
 4. **Close the browser session:**
    ```
@@ -322,13 +351,16 @@ After all workflows complete, compare every captured screenshot against its base
      { threshold: 0.1 }
    );
    ```
-   - `threshold: 0.1` is the per-pixel color distance threshold (0 = exact match, 1 = any color matches). This is the pixelmatch default and is not user-configurable.
+   - `threshold: 0.1` here is the `pixelmatch` per-pixel color-distance
+     threshold (0 = exact match, 1 = very tolerant). This internal tuning value
+     is distinct from Megatest's user-facing checkpoint threshold percentage.
    - `diffPercent = (numDiffPixels / (width * height)) * 100`
    - The diff image renders differing pixels in red on a transparent background.
 
 5. **Apply checkpoint threshold:**
-   - Each checkpoint may specify a `threshold` value (percentage, e.g., `0.1` means 0.1% of pixels).
-   - Default checkpoint threshold: `0` (any pixel difference is a failure).
+   - Each checkpoint may specify a `threshold` value (percentage, e.g., `0.1`
+     means 0.1% of pixels).
+   - Default checkpoint threshold: inherited from config schema (`defaults.threshold`, default `0.1`).
    - If `diffPercent > checkpointThreshold`: status = `"fail"`.
    - Else: status = `"pass"`.
 
@@ -364,17 +396,19 @@ await db.checkpoints.create({
 
 | Condition | Run Result |
 |-----------|-----------|
-| All checkpoints `pass` or `new` | `"pass"` |
+| All checkpoints `pass` | `"pass"` |
+| Any checkpoint `new` | `"fail"` |
 | Any checkpoint `fail` | `"fail"` |
 | Any checkpoint `error` | `"error"` |
 
-Note: a run with all `pass` and some `new` checkpoints still gets result `"pass"`, but the presence of `new` checkpoints is flagged in the PR comment and review UI so they can be reviewed and approved.
+`new` checkpoints are review-required and therefore keep the run result at
+`fail` until they are approved or a baseline is otherwise established.
 
 **Update run record:**
 
 ```ts
 await db.runs.update(runId, {
-  status: 'done',
+  status: 'completed',
   result: runResult,
   completed_at: new Date(),
 });
@@ -392,15 +426,17 @@ The commit status is set at multiple points during the run lifecycle:
 |-------|-------|-------------|
 | Run starts | `pending` | "Megatest: running visual tests..." |
 | Run completes, all pass | `success` | "Megatest: all visual tests passed" |
-| Run completes, new checkpoints only | `success` | "Megatest: {N} new screenshots to review" |
-| Run completes, diffs detected | `failure` | "Megatest: {N} visual differences found" |
+| Run completes, any failed or new checkpoints pending review | `failure` | "Megatest: {N} failed/new checkpoints require review" |
 | Run fails with error | `error` | "Megatest: run failed - {reason}" |
 
 The `target_url` on the commit status points to the review page: `{BASE_URL}/review/{runId}`.
 
 **PR Comment (for PR runs only):**
 
-If `prNumber` is set, the worker posts or updates a comment on the pull request. The comment is identified by a hidden marker (`<!-- megatest-run -->`) so that subsequent runs update the same comment rather than creating new ones.
+If `prNumber` is set, the worker posts or updates a comment on the pull
+request. The comment is identified by a hidden marker
+(`<!-- megatest:run:{runId} -->`) so that subsequent runs update the same
+comment rather than creating new ones.
 
 Comment contents:
 - Summary line: result emoji/text, number of checkpoints by status.
@@ -423,12 +459,14 @@ Cleanup runs unconditionally in a `finally` block, regardless of whether the run
    await container.remove({ force: true });
    ```
 
-2. **Remove the temporary directory:**
+2. **Remove the per-run Docker network.**
+
+3. **Remove the temporary directory:**
    ```
    rm -rf /tmp/megatest-{runId}/
    ```
 
-3. **Close any remaining agent-browser sessions:**
+4. **Close any remaining agent-browser sessions:**
    ```
    agent-browser --session megatest-{runId}-* close
    ```
@@ -468,7 +506,7 @@ Each failure mode is handled specifically to provide actionable error messages.
 | `setup.install` command fails | User config | Run fails. Message includes command, exit code, and stderr. Not retryable. |
 | `serve.ready` timeout | User config | Run fails. Message: "Server failed to start within {N}s". Includes last 50 lines of serve.cmd output. Not retryable. |
 | `serve.cmd` exits unexpectedly | User config | Run fails. Message: "Dev server exited with code {N}". Includes captured output. Not retryable. |
-| Step timeout | Test error | Checkpoint status = `error`. Message: "Step timed out after {N}s". Remaining steps in that workflow/viewport pair are skipped (unless `continueOnError`). Other pairs continue. |
+| Step timeout | Test error | Checkpoint status = `error`. Message: "Step timed out after {N}s". Remaining steps in that workflow/viewport pair are skipped. Other pairs continue. |
 | agent-browser crash (mid-session) | Infrastructure | Attempt to restart the session and retry the current step once. If restart fails, mark all remaining checkpoints in that workflow/viewport pair as `error`. Other pairs continue. |
 | agent-browser crash (all sessions) | Infrastructure | Mark all remaining checkpoints as `error`. Run result = `error`. Retryable. |
 | Out of memory (container OOM killed) | Infrastructure | Detected via container exit code 137. Run fails with "Container killed: out of memory". Retryable. |
@@ -487,7 +525,7 @@ Each failure mode is handled specifically to provide actionable error messages.
 |-------|---------|-------|
 | Workers per instance | 2 | Each worker handles one run at a time. Configured via BullMQ `concurrency`. |
 | Concurrent runs per project | 1 | Enforced via BullMQ group concurrency on `projectId`. Prevents race conditions on baselines. |
-| Concurrent workflow/viewport pairs | 3 | Each pair gets its own agent-browser session (own Chromium process). Configured in config.yml `defaults.parallel`. |
+| Concurrent workflow/viewport pairs | 3 | Each pair gets its own agent-browser session (own Chromium process). Configured by the worker, not by schema v1. |
 | Max concurrent Docker containers | 4 | Global semaphore across all workers in the process. Prevents resource exhaustion on the host. |
 
 **Why 1 concurrent run per project:** Baseline management requires serial execution. If two runs for the same project execute simultaneously, they could both read the same baselines, both generate "new" results, and create conflicting baseline records when approved. Serial execution per project avoids this entirely.

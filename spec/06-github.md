@@ -12,7 +12,7 @@ Megatest integrates with GitHub via a **GitHub App**. This is the only VCS provi
 
 | Permission      | Access | Purpose                                  |
 |-----------------|--------|------------------------------------------|
-| Contents        | Read   | Clone repos, read `.megatest/` config    |
+| Contents        | Write  | Clone repos, read `.megatest/` config, create discovery PR branches/commits |
 | Pull requests   | Write  | Post and update PR comments              |
 | Commit statuses | Write  | Post check statuses on commits           |
 | Metadata        | Read   | Required by GitHub for all Apps          |
@@ -26,7 +26,7 @@ Megatest integrates with GitHub via a **GitHub App**. This is the only VCS provi
 ### Subscribed Events
 
 - `push` -- trigger runs on branch pushes
-- `pull_request` -- trigger runs on PR open/update
+- `pull_request` -- trigger runs on PR open/update and merged-close promotion
 - `installation` -- track App installs and uninstalls
 - `installation_repositories` -- track repo access changes
 
@@ -145,7 +145,10 @@ Browser                     Megatest Server                GitHub
 
 7. **Create or update user record**: Match on `github_id`. Store `github_login`, `email`, `name`, `avatar_url`. The user access token is stored encrypted for later API calls on behalf of the user.
 
-8. **Set session**: Issue an HTTP-only, Secure, SameSite=Lax session cookie. Redirect to the page the user was on before login (stored in session or passed via `state`).
+8. **Set session**: Issue an HTTP-only, SameSite=Lax session cookie. Set
+   `Secure` when `BASE_URL` is HTTPS; allow non-secure cookies only for local
+   `http://localhost` / loopback development. Redirect to the page the user was
+   on before login (stored in session or passed via `state`).
 
 ---
 
@@ -193,7 +196,6 @@ Triggered when commits are pushed to a branch.
 - `ref` -- e.g., `refs/heads/main`
 - `after` -- the head commit SHA
 - `installation.id` -- for API access
-- `head_commit.message` -- for merge detection (section 9)
 - `sender.login` -- who pushed
 
 **Processing:**
@@ -202,23 +204,22 @@ Triggered when commits are pushed to a branch.
 2. Find project by `github_repo_id = repository.id`.
 3. If no matching project, ignore (respond 200).
 4. If branch filtering is configured on the project, check if this branch is tracked. Skip if not.
-5. Check for baseline promotion (section 9) if branch is the project's default branch.
-6. Create a `run` record:
+5. Create a `run` record:
    - `project_id`: matched project
    - `trigger`: `"push"`
    - `commit_sha`: `after`
    - `branch`: parsed branch name
-   - `github_installation_id`: `installation.id`
    - `status`: `"queued"`
-7. Enqueue the run job.
-8. Respond **202 Accepted** with `{ "run_id": "{id}" }`.
+6. Enqueue the run job.
+7. Respond **202 Accepted** with `{ "run_id": "{id}" }`.
 
 ### 4.2 pull_request
 
-Triggered on PR activity. Megatest acts on these actions: `opened`, `synchronize`, `reopened`.
+Triggered on PR activity. Megatest acts on these actions: `opened`,
+`synchronize`, `reopened`, and `closed` (for merged PR baseline promotion).
 
 **Extract from payload:**
-- `action` -- filter to `opened | synchronize | reopened`
+- `action` -- filter to `opened | synchronize | reopened | closed`
 - `repository.id` -- match to project
 - `repository.full_name` -- `{owner}/{repo}`
 - `pull_request.number` -- PR number
@@ -230,20 +231,21 @@ Triggered on PR activity. Megatest acts on these actions: `opened`, `synchronize
 
 **Processing:**
 
-1. If `action` is not one of `opened`, `synchronize`, `reopened`, ignore (respond 200).
+1. If `action` is not one of `opened`, `synchronize`, `reopened`, `closed`, ignore (respond 200).
 2. Find project by `github_repo_id = repository.id`.
 3. If no matching project, ignore (respond 200).
-4. Create a `run` record:
+4. If `action = closed` and `pull_request.merged = true`, trigger baseline promotion for the PR's most recent completed Megatest run and respond 200.
+5. If `action = closed` and `merged = false`, ignore (respond 200).
+6. Otherwise create a `run` record:
    - `project_id`: matched project
    - `trigger`: `"pull_request"`
    - `commit_sha`: `pull_request.head.sha`
    - `branch`: `pull_request.head.ref`
    - `base_branch`: `pull_request.base.ref`
    - `pr_number`: `pull_request.number`
-   - `github_installation_id`: `installation.id`
    - `status`: `"queued"`
-5. Enqueue the run job.
-6. Respond **202 Accepted** with `{ "run_id": "{id}" }`.
+7. Enqueue the run job.
+8. Respond **202 Accepted** with `{ "run_id": "{id}" }`.
 
 ### 4.3 installation.created
 
@@ -434,10 +436,10 @@ X-GitHub-Api-Version: 2022-11-28
 |---------------------------|--------------|------------------------------------------------------|
 | queued                    | `pending`    | `Megatest: running visual checks...`                 |
 | running                   | `pending`    | `Megatest: running visual checks...`                 |
-| done, all checkpoints pass| `success`    | `Megatest: {n} checkpoints passed`                   |
-| done, diffs detected      | `failure`    | `Megatest: {n} diffs detected -- review required`    |
-| done, all diffs approved  | `success`    | `Megatest: {n} diffs approved`                       |
-| failed (error in run)     | `error`      | `Megatest: run failed -- {error_message}`            |
+| completed, all checkpoints pass | `success` | `Megatest: {n} checkpoints passed` |
+| completed, any failed or new checkpoints pending review | `failure` | `Megatest: review required for {n} failed/new checkpoints` |
+| completed, all failed/new checkpoints later approved | `success` | `Megatest: all reviewable checkpoints approved` |
+| failed (error in run) | `error` | `Megatest: run failed -- {error_message}` |
 
 ### When to Post
 
@@ -531,7 +533,9 @@ X-GitHub-Api-Version: 2022-11-28
 **Variations:**
 
 - **All passing, no diffs**: Omit the "Changed checkpoints" details block. Show a one-line success message.
-- **New checkpoints (no baseline)**: Listed as "New" in the status table. These are not failures -- they are informational until a baseline is established.
+- **New checkpoints (no baseline)**: Listed as "New" in the status table and
+  treated as review-required. They do not produce GitHub `success` until
+  explicitly approved.
 - **Run failed**: Show error message instead of diff table.
 
 ### When to Post/Update
@@ -543,43 +547,32 @@ X-GitHub-Api-Version: 2022-11-28
 
 ## 9. Baseline Promotion on Merge
 
-When a PR is merged into the default branch, approved baselines from the PR should be promoted to the default branch baselines.
+When a PR is merged into the default branch, approved baselines from the PR are
+promoted from the `pull_request.closed` webhook with `merged = true`.
 
-### Detection
+### Trigger
 
-A push event to the default branch could be a direct push or a merge. To detect merges:
-
-**Option A -- Commit message heuristic:**
-Check if `head_commit.message` matches the pattern `Merge pull request #(\d+)` (GitHub's default merge commit message). Extract the PR number.
-
-**Option B -- GitHub API lookup:**
-```
-GET https://api.github.com/repos/{owner}/{repo}/commits/{sha}/pulls
-Authorization: token {INSTALLATION_TOKEN}
-Accept: application/vnd.github+json
-X-GitHub-Api-Version: 2022-11-28
-```
-
-Returns an array of associated PRs. If non-empty, this commit is associated with a PR.
-
-**Use Option A first, fall back to Option B.** Option B requires an additional API call but handles squash merges and rebase merges.
+Megatest does not infer merges from default-branch pushes. Promotion is driven
+directly by the merged PR event because it is explicit and does not rely on
+commit-message or merge-strategy heuristics.
 
 ### Promotion Logic
 
-1. From the push event on the default branch, determine the associated PR number.
-2. Find the most recent **completed** run for that PR.
-3. For each checkpoint in that run:
-   - If the checkpoint was **approved** (diff was reviewed and accepted), copy the new screenshot as the baseline for the default branch.
-   - If the checkpoint **passed** (matched existing baseline), no action needed -- the baseline is already correct.
-   - If the checkpoint has **unapproved diffs**, do NOT promote. The baseline remains unchanged.
-   - If the checkpoint is **new** (no prior baseline) and was approved, set it as the baseline for the default branch.
-4. Record the promotion event for audit purposes.
+1. On `pull_request.closed` with `merged = true`, find the most recent
+   `completed` run for that PR.
+2. For each checkpoint in that run:
+   - If the latest review action is **approve**, upsert the default-branch
+     baseline with the checkpoint's actual image.
+   - If the checkpoint **passed**, no action is needed.
+   - If the latest review action is **reject**, do not promote.
+   - If the checkpoint is `fail` or `new` with no approval, do not promote.
+3. Record the promotion event for audit purposes.
 
 ### Edge Cases
 
 - **No run found for PR**: Skip promotion. The PR may not have had Megatest configured.
-- **Multiple runs for PR**: Use the run matching the merge commit's parent SHA (the PR's head SHA at time of merge), or the most recent completed run.
-- **Force push to default branch**: Treat as a regular push, no promotion logic.
+- **Multiple runs for PR**: Use the most recent `completed` run for the PR head SHA at merge time when available, otherwise the most recent completed PR run.
+- **Direct push to default branch**: Treat as a normal push. No promotion logic runs.
 
 ---
 

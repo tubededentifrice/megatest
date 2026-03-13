@@ -17,7 +17,9 @@ Dates are ISO-8601 strings in UTC.  IDs are UUIDs unless noted otherwise.
 ## 1  Authentication
 
 Authentication is cookie-based.  A successful OAuth flow sets an
-`HttpOnly` / `Secure` / `SameSite=Lax` session cookie.  Every `/api/v1/*`
+`HttpOnly` / `SameSite=Lax` session cookie. `Secure` is enabled for HTTPS
+deployments and may be disabled only for local `http://localhost` /
+loopback development. Every `/api/v1/*`
 endpoint requires this cookie; missing or invalid sessions return **401**.
 
 ### 1.1  GET /auth/github
@@ -46,6 +48,20 @@ the session cookie, and redirects.
 **Response:** 302 redirect to the `redirect` URL embedded in `state`, or `/`.
 
 **Error:** If the code exchange fails, redirects to `/?error=auth_failed`.
+
+---
+
+### 1.2b  GET /auth/github/setup
+
+Optional post-install landing route from the GitHub App Setup URL. Associates
+the current session with the installation context and redirects back into the
+SPA so the repo picker can show repositories immediately.
+
+| Query param        | Type   | Required | Description |
+|--------------------|--------|----------|-------------|
+| `installation_id`  | number | yes      | GitHub App installation ID. |
+
+**Response:** 302 redirect to `/` (or a stored return path).
 
 ---
 
@@ -115,6 +131,7 @@ The request is validated using the HMAC-SHA256 signature in the
 |------------------------------|------------------------------------|-----------|
 | `push`                       | --                                 | Creates a run for the pushed branch. |
 | `pull_request`               | `opened`, `synchronize`, `reopened`| Creates a run for the PR head commit. |
+| `pull_request`               | `closed`                           | Promotes approved baselines if `merged=true`. |
 | `installation`               | `created`                          | Records the new GitHub App installation. |
 | `installation`               | `deleted`                          | Removes the installation and deactivates linked projects. |
 | `installation_repositories`  | `added`                            | Grants Megatest access to the newly added repos. |
@@ -126,7 +143,7 @@ Unrecognised events or actions are acknowledged with 200 and ignored.
 
 ```json
 {
-  "runId": "a1b2c3d4-..."
+  "run_id": "a1b2c3d4-..."
 }
 ```
 
@@ -138,7 +155,7 @@ Unrecognised events or actions are acknowledged with 200 and ignored.
 }
 ```
 
-**Response: 400** (signature mismatch or malformed payload)
+**Response: 401** (signature mismatch)
 
 ```json
 {
@@ -199,20 +216,20 @@ installations.
 {
   "projects": [
     {
-      "id": "proj_abc123",
+      "id": "9a8b7c6d-1111-4444-8888-0123456789ab",
       "name": "octocat/hello-world",
       "repo_url": "https://github.com/octocat/hello-world",
       "default_branch": "main",
       "is_active": true,
       "last_run": {
-        "id": "run_xyz789",
+        "id": "a1b2c3d4-1111-4444-8888-0123456789ab",
         "status": "completed",
-        "result": "passed",
+        "result": "pass",
         "created_at": "2026-03-12T14:30:00Z"
       }
     },
     {
-      "id": "proj_def456",
+      "id": "9a8b7c6d-2222-4444-8888-0123456789ab",
       "name": "octocat/spoon-knife",
       "repo_url": "https://github.com/octocat/spoon-knife",
       "default_branch": "main",
@@ -251,7 +268,7 @@ provided `installation_id` to fetch repository details from the GitHub API.
 ```json
 {
   "project": {
-    "id": "proj_abc123",
+    "id": "9a8b7c6d-1111-4444-8888-0123456789ab",
     "name": "octocat/hello-world",
     "repo_url": "https://github.com/octocat/hello-world",
     "default_branch": "main",
@@ -273,6 +290,48 @@ provided `installation_id` to fetch repository details from the GitHub API.
 
 ---
 
+#### GET /api/v1/installations
+
+Lists GitHub App installations visible to the current user.
+
+**Response: 200**
+
+```json
+{
+  "installations": [
+    {
+      "id": "1d5c6c6e-6fa8-49fb-a31b-1fcb6ff0e000",
+      "installation_id": 78901,
+      "account_login": "octocat",
+      "account_type": "user"
+    }
+  ]
+}
+```
+
+---
+
+#### GET /api/v1/installations/:id/repositories
+
+Lists repositories currently accessible through an installation. Used by the
+dashboard repo picker.
+
+**Response: 200**
+
+```json
+{
+  "repositories": [
+    {
+      "repo_id": 123456,
+      "full_name": "octocat/hello-world",
+      "default_branch": "main"
+    }
+  ]
+}
+```
+
+---
+
 #### GET /api/v1/projects/:id
 
 Returns full details for a single project.
@@ -282,14 +341,14 @@ Returns full details for a single project.
 ```json
 {
   "project": {
-    "id": "proj_abc123",
+    "id": "9a8b7c6d-1111-4444-8888-0123456789ab",
     "name": "octocat/hello-world",
     "repo_url": "https://github.com/octocat/hello-world",
     "default_branch": "main",
     "is_active": true,
     "settings": {
-      "threshold": 0.1,
-      "viewports": ["1280x720", "375x812"]
+      "tracked_branches": ["main", "release/*"],
+      "run_timeout_seconds": 900
     },
     "created_at": "2026-03-13T10:00:00Z"
   }
@@ -307,13 +366,13 @@ fields are changed.
 
 | Field            | Type   | Required | Description |
 |------------------|--------|----------|-------------|
-| `settings`       | object | no       | Arbitrary settings object (merged with existing). |
+| `settings`       | object | no       | Operational settings object (merged with existing). Does not override repo `.megatest` workflow semantics. |
 | `default_branch` | string | no       | Default branch name. |
 
 ```json
 {
   "settings": {
-    "threshold": 0.05
+    "run_timeout_seconds": 1200
   },
   "default_branch": "develop"
 }
@@ -324,14 +383,14 @@ fields are changed.
 ```json
 {
   "project": {
-    "id": "proj_abc123",
+    "id": "9a8b7c6d-1111-4444-8888-0123456789ab",
     "name": "octocat/hello-world",
     "repo_url": "https://github.com/octocat/hello-world",
     "default_branch": "develop",
     "is_active": true,
     "settings": {
-      "threshold": 0.05,
-      "viewports": ["1280x720", "375x812"]
+      "tracked_branches": ["main", "release/*"],
+      "run_timeout_seconds": 1200
     },
     "created_at": "2026-03-13T10:00:00Z"
   }
@@ -385,7 +444,74 @@ are listed.
 
 ---
 
+#### GET /api/v1/projects/:id/secrets
+
+Returns the configured secret key names for a project.
+
+**Response: 200**
+
+```json
+{
+  "keys": ["API_KEY", "DATABASE_URL"]
+}
+```
+
+---
+
+#### GET /api/v1/projects/:id/baselines
+
+Lists the current approved baselines for a project branch.
+
+| Query param | Type   | Default | Description |
+|-------------|--------|---------|-------------|
+| `branch`    | string | project's `default_branch` | Branch whose baselines should be listed. |
+
+**Response: 200**
+
+```json
+{
+  "baselines": [
+    {
+      "workflow": "homepage",
+      "checkpoint": "hero",
+      "viewport": "desktop",
+      "updated_at": "2026-03-13T10:10:00Z"
+    }
+  ]
+}
+```
+
+---
+
 ### 3.3  Runs
+
+#### GET /api/v1/runs/recent
+
+Lists recent runs across all projects accessible to the current user.
+
+| Query param | Type   | Default | Description |
+|-------------|--------|---------|-------------|
+| `limit`     | number | 10      | Maximum number of runs to return (max 50). |
+
+**Response: 200**
+
+```json
+{
+  "runs": [
+    {
+      "id": "a1b2c3d4-1111-4444-8888-0123456789ab",
+      "project_id": "9a8b7c6d-1111-4444-8888-0123456789ab",
+      "project_name": "octocat/hello-world",
+      "branch": "main",
+      "status": "completed",
+      "result": "pass",
+      "created_at": "2026-03-12T14:29:55Z"
+    }
+  ]
+}
+```
+
+---
 
 #### GET /api/v1/projects/:id/runs
 
@@ -394,7 +520,7 @@ Lists runs for a project with optional filters.
 | Query param | Type   | Default | Description |
 |-------------|--------|---------|-------------|
 | `branch`    | string | --      | Filter by branch name. |
-| `status`    | string | --      | Filter by status: `queued`, `running`, `completed`, `cancelled`. |
+| `status`    | string | --      | Filter by status: `queued`, `cloning`, `setting_up`, `running`, `comparing`, `completed`, `failed`, `cancelled`. |
 | `page`      | number | 1       | Page number. |
 | `per_page`  | number | 20      | Items per page (max 100). |
 
@@ -404,15 +530,15 @@ Lists runs for a project with optional filters.
 {
   "runs": [
     {
-      "id": "run_xyz789",
-      "project_id": "proj_abc123",
+      "id": "a1b2c3d4-1111-4444-8888-0123456789ab",
+      "project_id": "9a8b7c6d-1111-4444-8888-0123456789ab",
       "trigger": "push",
       "branch": "feat/login",
       "commit_sha": "abc123def456",
       "base_branch": "main",
       "pr_number": null,
       "status": "completed",
-      "result": "failed",
+      "result": "fail",
       "error_message": null,
       "checkpoint_summary": {
         "total": 12,
@@ -441,48 +567,51 @@ Returns full run detail including its checkpoints.
 ```json
 {
   "run": {
-    "id": "run_xyz789",
-    "project_id": "proj_abc123",
+    "id": "a1b2c3d4-1111-4444-8888-0123456789ab",
+    "project_id": "9a8b7c6d-1111-4444-8888-0123456789ab",
     "trigger": "push",
     "branch": "feat/login",
     "commit_sha": "abc123def456",
     "base_branch": "main",
     "pr_number": null,
     "status": "completed",
-    "result": "failed",
+    "result": "fail",
     "error_message": null,
     "started_at": "2026-03-12T14:30:00Z",
     "completed_at": "2026-03-12T14:32:15Z",
     "created_at": "2026-03-12T14:29:55Z",
     "checkpoints": [
       {
-        "id": "chk_001",
+        "id": "2fa6a512-1111-4444-8888-0123456789ab",
         "workflow": "auth",
         "name": "login-page",
         "viewport": "1280x720",
-        "status": "passed",
+        "status": "pass",
+        "review_state": "none",
         "diff_percent": 0.0,
         "threshold": 0.1,
         "dimensions": { "width": 1280, "height": 720 },
         "baseline_dimensions": { "width": 1280, "height": 720 }
       },
       {
-        "id": "chk_002",
+        "id": "2fa6a512-2222-4444-8888-0123456789ab",
         "workflow": "auth",
         "name": "login-error",
         "viewport": "1280x720",
-        "status": "failed",
+        "status": "fail",
+        "review_state": "pending",
         "diff_percent": 4.7,
         "threshold": 0.1,
         "dimensions": { "width": 1280, "height": 720 },
         "baseline_dimensions": { "width": 1280, "height": 720 }
       },
       {
-        "id": "chk_003",
+        "id": "2fa6a512-3333-4444-8888-0123456789ab",
         "workflow": "dashboard",
         "name": "empty-state",
         "viewport": "375x812",
         "status": "new",
+        "review_state": "pending",
         "diff_percent": null,
         "threshold": 0.1,
         "dimensions": { "width": 375, "height": 812 },
@@ -504,7 +633,7 @@ Cancels a run that is currently `queued` or `running`.
 ```json
 {
   "run": {
-    "id": "run_xyz789",
+      "id": "a1b2c3d4-1111-4444-8888-0123456789ab",
     "status": "cancelled",
     "result": null,
     "completed_at": "2026-03-13T10:05:00Z"
@@ -533,8 +662,8 @@ original.
 ```json
 {
   "run": {
-    "id": "run_new456",
-    "project_id": "proj_abc123",
+    "id": "a1b2c3d4-2222-4444-8888-0123456789ab",
+    "project_id": "9a8b7c6d-1111-4444-8888-0123456789ab",
     "trigger": "manual",
     "branch": "feat/login",
     "commit_sha": "abc123def456",
@@ -565,11 +694,12 @@ Lists all checkpoints for a run.
 {
   "checkpoints": [
     {
-      "id": "chk_001",
+      "id": "2fa6a512-1111-4444-8888-0123456789ab",
       "workflow": "auth",
       "name": "login-page",
       "viewport": "1280x720",
-      "status": "passed",
+      "status": "pass",
+      "review_state": "none",
       "diff_percent": 0.0,
       "threshold": 0.1,
       "dimensions": { "width": 1280, "height": 720 },
@@ -590,20 +720,21 @@ Returns full checkpoint detail including storage paths.
 ```json
 {
   "checkpoint": {
-    "id": "chk_002",
-    "run_id": "run_xyz789",
-    "project_id": "proj_abc123",
+    "id": "2fa6a512-2222-4444-8888-0123456789ab",
+    "run_id": "a1b2c3d4-1111-4444-8888-0123456789ab",
+    "project_id": "9a8b7c6d-1111-4444-8888-0123456789ab",
     "workflow": "auth",
     "name": "login-error",
     "viewport": "1280x720",
-    "status": "failed",
+    "status": "fail",
+    "review_state": "pending",
     "diff_percent": 4.7,
     "threshold": 0.1,
     "dimensions": { "width": 1280, "height": 720 },
     "baseline_dimensions": { "width": 1280, "height": 720 },
-    "actual_path": "proj_abc123/run_xyz789/auth/login-error/1280x720/actual.png",
-    "baseline_path": "proj_abc123/baselines/main/auth/login-error/1280x720/baseline.png",
-    "diff_path": "proj_abc123/run_xyz789/auth/login-error/1280x720/diff.png",
+    "actual_path": "9a8b7c6d-1111-4444-8888-0123456789ab/a1b2c3d4-1111-4444-8888-0123456789ab/auth/login-error/1280x720/actual.png",
+    "baseline_path": "9a8b7c6d-1111-4444-8888-0123456789ab/baselines/main/auth/login-error/1280x720/baseline.png",
+    "diff_path": "9a8b7c6d-1111-4444-8888-0123456789ab/a1b2c3d4-1111-4444-8888-0123456789ab/auth/login-error/1280x720/diff.png",
     "created_at": "2026-03-12T14:31:00Z"
   }
 }
@@ -652,10 +783,10 @@ actual and baseline.
 
 #### POST /api/v1/checkpoints/:id/approve
 
-Approves a single checkpoint.  The actual screenshot becomes the new
-baseline for this checkpoint's branch.  If all checkpoints in the parent
-run are now approved or passed, the server updates the GitHub commit status
-to `success`.
+Approves a single checkpoint. The actual screenshot becomes the new baseline
+for this checkpoint's branch. Execution status remains unchanged; the API
+returns a derived `review_state`. If all reviewable checkpoints in the parent
+run are now approved, the server updates the GitHub commit status to `success`.
 
 **Request body:**
 
@@ -674,12 +805,13 @@ to `success`.
 ```json
 {
   "checkpoint": {
-    "id": "chk_002",
-    "run_id": "run_xyz789",
+    "id": "2fa6a512-1111-4444-8888-0123456789ab",
+    "run_id": "a1b2c3d4-1111-4444-8888-0123456789ab",
     "workflow": "auth",
     "name": "login-error",
     "viewport": "1280x720",
-    "status": "approved",
+    "status": "fail",
+    "review_state": "approved",
     "diff_percent": 4.7,
     "threshold": 0.1,
     "approved_by": "b1a2c3d4-...",
@@ -687,7 +819,7 @@ to `success`.
   },
   "baseline": {
     "id": "bl_new789",
-    "project_id": "proj_abc123",
+    "project_id": "9a8b7c6d-1111-4444-8888-0123456789ab",
     "branch": "feat/login",
     "workflow": "auth",
     "name": "login-error",
@@ -710,8 +842,8 @@ to `success`.
 
 #### POST /api/v1/checkpoints/:id/reject
 
-Rejects a single checkpoint.  The run remains in a failed state and the
-GitHub commit status stays as `failure`.
+Rejects a single checkpoint. The run remains in a failed state and the GitHub
+commit status stays `failure`.
 
 **Request body:**
 
@@ -730,12 +862,13 @@ GitHub commit status stays as `failure`.
 ```json
 {
   "checkpoint": {
-    "id": "chk_002",
-    "run_id": "run_xyz789",
+    "id": "2fa6a512-1111-4444-8888-0123456789ab",
+    "run_id": "a1b2c3d4-1111-4444-8888-0123456789ab",
     "workflow": "auth",
     "name": "login-error",
     "viewport": "1280x720",
-    "status": "rejected",
+    "status": "fail",
+    "review_state": "rejected",
     "diff_percent": 4.7,
     "threshold": 0.1,
     "rejected_by": "b1a2c3d4-...",
@@ -749,7 +882,7 @@ GitHub commit status stays as `failure`.
 #### POST /api/v1/runs/:id/approve-all
 
 Bulk-approves all checkpoints in the run that are in a reviewable state
-(`failed` or `new`).  Each approved checkpoint's actual screenshot becomes
+(`fail` or `new`). Each approved checkpoint's actual screenshot becomes
 the new baseline.  The GitHub commit status is updated to `success`.
 
 **Request body:**
@@ -770,18 +903,21 @@ the new baseline.  The GitHub commit status is updated to `success`.
 {
   "approved_count": 2,
   "run": {
-    "id": "run_xyz789",
+    "id": "a1b2c3d4-1111-4444-8888-0123456789ab",
     "status": "completed",
-    "result": "approved",
+    "result": "fail",
+    "review_state": "approved",
     "checkpoints": [
       {
-        "id": "chk_002",
-        "status": "approved",
+        "id": "2fa6a512-1111-4444-8888-0123456789ab",
+        "status": "fail",
+        "review_state": "approved",
         "approved_at": "2026-03-13T10:15:00Z"
       },
       {
-        "id": "chk_003",
-        "status": "approved",
+        "id": "2fa6a512-2222-4444-8888-0123456789ab",
+        "status": "new",
+        "review_state": "approved",
         "approved_at": "2026-03-13T10:15:00Z"
       }
     ]
@@ -804,9 +940,9 @@ the new baseline.  The GitHub commit status is updated to `success`.
 
 #### POST /api/v1/projects/:id/discover
 
-Triggers AI-powered workflow discovery for the project.  The server clones
-the repository and uses an LLM to analyse the codebase, identify key user
-flows, and generate `.megatest/` configuration files.
+Triggers AI-powered workflow discovery for the project. The server clones the
+repository, starts the app, explores it with `agent-browser`, and generates
+`.megatest/` configuration files in the canonical schema from spec 02.
 
 **Request body:**
 
@@ -824,7 +960,7 @@ flows, and generate `.megatest/` configuration files.
 
 ```json
 {
-  "discovery_id": "disc_abc123"
+  "discovery_id": "7c0a4de1-1111-4444-8888-0123456789ab"
 }
 ```
 
@@ -839,12 +975,16 @@ Returns the current status and results of a discovery job.
 ```json
 {
   "discovery": {
-    "id": "disc_abc123",
-    "project_id": "proj_abc123",
+    "id": "7c0a4de1-1111-4444-8888-0123456789ab",
+    "project_id": "9a8b7c6d-1111-4444-8888-0123456789ab",
     "status": "running",
-    "workflows_found": [],
-    "config_files": {},
-    "created_at": "2026-03-13T10:20:00Z"
+      "progress": {
+        "phase": "exploration",
+        "pages_visited": 7,
+        "elapsed_seconds": 45
+      },
+      "config_files": {},
+      "created_at": "2026-03-13T10:20:00Z"
   }
 }
 ```
@@ -854,27 +994,36 @@ Returns the current status and results of a discovery job.
 ```json
 {
   "discovery": {
-    "id": "disc_abc123",
-    "project_id": "proj_abc123",
+    "id": "7c0a4de1-1111-4444-8888-0123456789ab",
+    "project_id": "9a8b7c6d-1111-4444-8888-0123456789ab",
     "status": "completed",
-    "workflows_found": [
+    "report": {
+      "pages_visited": 14,
+      "pages_skipped": 2,
+      "workflows_generated": 2,
+      "includes_generated": 1,
+      "auth_detected": true
+    },
+    "workflows": [
       {
-        "name": "auth",
-        "description": "Authentication flow: login, signup, password reset",
-        "steps": 8,
-        "checkpoints": 5
+        "name": "login",
+        "file": "workflows/login.yml",
+        "confidence": 0.82,
+        "steps_count": 7,
+        "screenshots_count": 3
       },
       {
         "name": "dashboard",
-        "description": "Main dashboard with data tables and charts",
-        "steps": 4,
-        "checkpoints": 3
+        "file": "workflows/dashboard.yml",
+        "confidence": 0.95,
+        "steps_count": 4,
+        "screenshots_count": 2
       }
     ],
     "config_files": {
-      ".megatest/config.yaml": "project:\n  name: hello-world\n  base_url: http://localhost:3000\n...",
-      ".megatest/workflows/auth.yaml": "name: auth\nsteps:\n  - goto: /login\n  - screenshot: login-page\n...",
-      ".megatest/workflows/dashboard.yaml": "name: dashboard\nsteps:\n  - goto: /dashboard\n  - screenshot: empty-state\n..."
+      ".megatest/config.yml": "version: \"1\"\nsetup:\n  install:\n    - npm ci\n  serve:\n    cmd: npm run dev\n    ready: http://localhost:3000\n...",
+      ".megatest/workflows/login.yml": "name: login\nsteps:\n  - open: http://localhost:3000/login\n  - screenshot: login-page\n...",
+      ".megatest/workflows/dashboard.yml": "name: dashboard\nsteps:\n  - include: login\n  - open: http://localhost:3000/dashboard\n  - screenshot: empty-state\n..."
     },
     "created_at": "2026-03-13T10:20:00Z"
   }
@@ -982,17 +1131,20 @@ a `Retry-After` header (in seconds).
 | Value       | Description |
 |-------------|-------------|
 | `queued`    | Run created, waiting for a worker. |
-| `running`   | Worker is executing the run. |
+| `cloning`   | Repository is being cloned. |
+| `setting_up`| Environment setup is running. |
+| `running`   | Workflows are being executed. |
+| `comparing` | Screenshots are being compared. |
 | `completed` | Run finished (inspect `result` for outcome). |
+| `failed`    | Run terminated due to an infrastructure or configuration error. |
 | `cancelled` | Run was cancelled by a user. |
 
 ### Run result
 
 | Value      | Description |
 |------------|-------------|
-| `passed`   | All checkpoints passed within their thresholds. |
-| `failed`   | One or more checkpoints exceeded their threshold. |
-| `approved` | All failed/new checkpoints were manually approved. |
+| `pass`     | All checkpoints passed within their thresholds. |
+| `fail`     | One or more checkpoints failed or require review (`new`). |
 | `error`    | The run failed due to an infrastructure or configuration error. |
 | `null`     | Run has not completed yet. |
 
@@ -1000,12 +1152,19 @@ a `Retry-After` header (in seconds).
 
 | Value      | Description |
 |------------|-------------|
-| `passed`   | Diff is within threshold. |
-| `failed`   | Diff exceeds threshold. |
+| `pass`     | Diff is within threshold. |
+| `fail`     | Diff exceeds threshold. |
 | `new`      | No baseline exists -- requires initial approval. |
-| `approved` | Manually approved by a reviewer. |
-| `rejected` | Manually rejected by a reviewer. |
 | `error`    | Screenshot capture or comparison failed. |
+
+### Review state
+
+| Value       | Description |
+|-------------|-------------|
+| `none`      | No review was required (`pass` / `error`). |
+| `pending`   | Checkpoint is `fail` or `new` and awaiting review. |
+| `approved`  | Latest review action approved the checkpoint. |
+| `rejected`  | Latest review action rejected the checkpoint. |
 
 ### Discovery status
 

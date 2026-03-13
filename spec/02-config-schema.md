@@ -379,6 +379,7 @@ Capture a screenshot for visual comparison.
     threshold: <number>
     mode: <string>
     selector: <string>
+    mask: [<string>, ...]
 ```
 
 - **Value type:** `string` or `object`.
@@ -389,10 +390,13 @@ Capture a screenshot for visual comparison.
 | `threshold` | `number` | No | Inherits from `defaults.threshold` | Override pixel diff threshold for this screenshot. |
 | `mode` | `string` | No | Inherits from `defaults.screenshotMode` | `"viewport"` or `"full"`. |
 | `selector` | `string` | No | -- | CSS selector to capture a specific element instead of the full viewport/page. |
+| `mask` | `array of string` | No | `[]` | CSS selectors for regions to ignore during comparison (dynamic timestamps, ads, live counters, etc.). |
 
 - **Maps to:** `agent-browser screenshot <path>` with `--full` flag when `mode: full`.
 - The output path is determined by the runner: `<workflow-name>/<viewport-name>/<screenshot-name>.png`.
 - Screenshot names MUST be unique within a single workflow. Duplicate names within the same workflow are a validation error. Different workflows may reuse the same screenshot name.
+- When `mask` is present, the runner removes or neutralizes the matching regions
+  in both baseline and actual images before diffing.
 
 ### 6.9 `scroll`
 
@@ -721,6 +725,7 @@ interface ScreenshotConfig {
   threshold?: number;
   mode?: "viewport" | "full";
   selector?: string;                       // CSS selector for element capture
+  mask?: string[];                         // CSS selectors masked before diffing
 }
 
 interface ScrollDirection {
@@ -1191,7 +1196,11 @@ The following JSON Schema can be used for programmatic validation of `config.yml
         "name": { "type": "string", "pattern": "^[a-z0-9-]+$" },
         "threshold": { "type": "number", "minimum": 0, "maximum": 100 },
         "mode": { "type": "string", "enum": ["viewport", "full"] },
-        "selector": { "type": "string" }
+        "selector": { "type": "string" },
+        "mask": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
       }
     },
     "ScrollDirection": {
