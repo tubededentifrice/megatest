@@ -235,7 +235,7 @@ When discovery finishes successfully, the progress card transitions to a results
 │  ├── workflows/settings.yml          (confidence: 75%)       │
 │  └── includes/login.yml                                      │
 │                                                              │
-│  [Review & create PR]  [Store server-side]  [Edit first]     │
+│  [Review & create PR]  [Edit first]                          │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -249,15 +249,16 @@ The card displays:
 
 The user chooses how to apply the generated config:
 
-**Review & create PR** (default, recommended for `config_storage_mode = 'repo'`):
+**Review & create PR** (default):
 
 1. User clicks the button.
 2. A preview dialog shows the generated files in a read-only YAML viewer, organized as a file tree. Each file is expandable.
 3. User can uncheck individual files to exclude them.
 4. User clicks "Create PR".
 5. `POST /api/v1/discoveries/:id/apply` is called with `create_pr: true` and the selected `files_to_include`.
-6. The response includes the `pr_url`.
-7. The card updates to show the PR link:
+6. The PR is created on the config repo (which is the project repo by default).
+7. The response includes the `pr_url`.
+8. The card updates to show the PR link:
 
    ```
    ┌──────────────────────────────────────────────────────────────┐
@@ -270,24 +271,7 @@ The user chooses how to apply the generated config:
    └──────────────────────────────────────────────────────────────┘
    ```
 
-8. After the user merges, the next push/PR event (matching trigger rules) triggers a run.
-
-**Store server-side:**
-
-1. User clicks the button.
-2. `POST /api/v1/discoveries/:id/apply` is called. The server detects that the project should switch to (or already uses) `config_storage_mode = 'server'` and stores the config files in the `project_configs` table via `PUT /api/v1/projects/:id/config`.
-3. Config is immediately available. No PR merge needed.
-4. If trigger rules include pushes to the default branch, a proactive first run may be triggered (section 5.1).
-5. The card updates:
-
-   ```
-   ┌──────────────────────────────────────────────────────────────┐
-   │  ✓ Config applied server-side for acme/web-app               │
-   │                                                              │
-   │  8 workflows stored. Runs can trigger immediately.           │
-   │  [View project →]                                            │
-   └──────────────────────────────────────────────────────────────┘
-   ```
+9. After the user merges, the next push/PR event (matching trigger rules) triggers a run.
 
 **Edit first:**
 
@@ -295,10 +279,8 @@ The user chooses how to apply the generated config:
 2. A config editor opens: a simple in-browser code editor (monospace textarea with syntax highlighting or a lightweight library like CodeMirror) displaying the generated YAML files in a tabbed interface.
 3. User can modify any file, add new files, or remove files.
 4. User clicks "Apply" when satisfied.
-5. Depending on the project's `config_storage_mode`:
-   - **repo:** Creates a PR with the edited files (`POST /api/v1/discoveries/:id/apply` with modified `config_files`).
-   - **server:** Stores the edited files in the database.
-6. The flow continues as with the other two options.
+5. A PR is created on the config repo with the edited files (`POST /api/v1/discoveries/:id/apply` with modified `config_files`).
+6. The flow continues as with "Review & create PR".
 
 ### 4.4 Discovery Failure
 
@@ -356,7 +338,7 @@ The error message comes from `discovery.error.message`. The card offers four rec
 
 1. Opens the config editor (same as "Edit first" in section 4.3) with a blank template.
 2. User writes or pastes their own YAML config.
-3. Config is applied via PR or server-side storage.
+3. Config is applied via PR on the config repo.
 
 **Try again:**
 
@@ -374,39 +356,11 @@ The error message comes from `discovery.error.message`. The card offers four rec
 
 ## 5. First Run
 
-After config is in place -- either the discovery PR was merged, config was stored server-side, or the user uploaded config manually -- the project is ready for visual test runs.
+After the config PR is merged, the project is ready for visual test runs. Since all config is applied via PR merge, the first run happens after the PR is merged and a subsequent push or PR event (matching trigger rules) triggers it. The merge itself creates a push event on the default branch, which triggers the first run if push-based trigger rules are configured.
 
-### 5.1 Proactive First Run
+### 5.1 First Run Behavior
 
-When config is stored server-side (not requiring a PR merge), and the project's trigger rules include pushes to the default branch, Megatest can immediately trigger a run against the current HEAD of the default branch. This gives the user results within minutes of connecting.
-
-**Trigger conditions (all must be met):**
-1. Config was just applied server-side (not via PR).
-2. The project's trigger rules include a `push` rule matching the default branch.
-3. No run has been created for this project yet.
-
-**Flow:**
-1. Server creates a run record with `trigger = 'manual'`, `branch = project.default_branch`, and `commit_sha` set to the current HEAD of the default branch (fetched via the GitHub API).
-2. The run is enqueued as a normal job.
-3. The dashboard shows the run progress:
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│  ✓ Config applied. Running first visual test...              │
-│                                                              │
-│  Branch: main                                                │
-│  Commit: a1b2c3d (latest on main)                            │
-│  Status: ◐ Running workflows... (4/8 complete)               │
-│                                                              │
-│  [View run details]                                          │
-└──────────────────────────────────────────────────────────────┘
-```
-
-4. "View run details" links to the review page (`/review/:runId`).
-
-### 5.2 First Run Behavior
-
-Whether triggered proactively or by the next push/PR event, the first run has special characteristics:
+The first run has special characteristics:
 
 1. **No baselines exist.** Every checkpoint is `status = 'new'`.
 2. **The review page shows all screenshots as NEW.** Each checkpoint card displays the actual image with the message "No baseline exists for this checkpoint. This is the first capture. Approve to set it as the baseline." (spec 07 section 1.3, NEW checkpoint).
@@ -414,7 +368,7 @@ Whether triggered proactively or by the next push/PR event, the first run has sp
 4. **Approving establishes the initial baselines.** When the user clicks "Approve All", each checkpoint's actual image is saved as the baseline for the project's branch via `POST /api/v1/runs/:id/approve-all`.
 5. **Subsequent runs compare against these baselines.** Once baselines are set, future runs produce `pass` or `fail` results based on pixel comparison.
 
-### 5.3 First Run Review Page
+### 5.2 First Run Review Page
 
 The review page for a first run has a slightly different header to guide the user:
 
@@ -470,7 +424,7 @@ The dashboard shows a persistent onboarding checklist for new users until all st
 │  ✓ Install Megatest GitHub App                               │
 │  ✓ Connect your first repository                             │
 │  ◐ Wait for workflow discovery                               │
-│  ○ Review and merge config PR (or apply server-side)         │
+│  ○ Review and merge config PR                                │
 │  ○ Configure trigger rules                                   │
 │  ○ Approve first run baselines                               │
 │                                                              │
@@ -494,7 +448,7 @@ The dashboard shows a persistent onboarding checklist for new users until all st
 | Install Megatest GitHub App | `GET /api/v1/installations` returns at least one active installation |
 | Connect your first repository | `GET /api/v1/projects` returns at least one project |
 | Wait for workflow discovery | The project's most recent discovery has `status = 'completed'`, OR the project already had `.megatest/` config (discovery was skipped) |
-| Review and merge config PR | Config is available for runs: either the discovery PR was merged (`.megatest/` exists in repo), or config is stored server-side (`config_storage_mode = 'server'` and `project_configs` has entries) |
+| Review and merge config PR | Config is available for runs: the discovery PR was merged (`.megatest/` exists in the config repo) |
 | Configure trigger rules | `GET /api/v1/projects/:id/triggers` returns a non-empty trigger configuration |
 | Approve first run baselines | At least one run for the project has `status = 'completed'` and all reviewable checkpoints in that run have `review_state = 'approved'` |
 
@@ -508,7 +462,7 @@ Each checklist step is clickable and links to the relevant action:
 | Install Megatest GitHub App | GitHub App installation page |
 | Connect your first repository | Opens the repo picker dialog |
 | Wait for workflow discovery | Project page with discovery status |
-| Review and merge config PR | The PR URL on GitHub (or the project page if server-side) |
+| Review and merge config PR | The PR URL on GitHub |
 | Configure trigger rules | Project settings tab (`/project/:id?tab=settings`) |
 | Approve first run baselines | Review page for the first completed run |
 
@@ -680,14 +634,14 @@ The complete onboarding flow from first visit to established baselines:
               │              ▼                      ▼
               │     ┌────────────────┐     ┌────────────────┐
               │     │  Results card   │     │  Error card     │
-              │     │  [PR] [Server]  │     │  [Retry]        │
-              │     │  [Edit]         │     │  [Setup cmds]   │
+              │     │  [PR] [Edit]    │     │  [Retry]        │
+              │     │                 │     │  [Setup cmds]   │
               │     └────────┬───────┘     │  [Manual]        │
               │              │             │  [Skip]          │
               │              ▼             └────────┬───────┘
               │     ┌────────────────┐              │
-              │     │  Config applied │◄─────────────┘
-              │     │  (PR or server) │
+              │     │  Config PR      │◄─────────────┘
+              │     │  created        │
               │     └────────┬───────┘
               │              │
               ▼              ▼
@@ -775,6 +729,4 @@ This section summarizes the API endpoints involved in the onboarding flow and th
 
 3. **Onboarding checklist persistence.** Should checklist dismissal be stored server-side (user preferences in the database) or client-side (localStorage)? Server-side is consistent across devices; client-side is simpler to implement.
 
-4. **Proactive first run quota impact.** The proactive first run (section 5.1) consumes screenshots from the user's quota. Should there be a confirmation prompt ("This will use approximately N screenshots from your free tier") before triggering it automatically?
-
-5. **Discovery timeout UX.** Discovery has a 5-minute wall-clock limit (spec 08 section 6.1). If a large app approaches this limit, should the progress card show a warning, or just let it complete with partial results?
+4. **Discovery timeout UX.** Discovery has a 5-minute wall-clock limit (spec 08 section 6.1). If a large app approaches this limit, should the progress card show a warning, or just let it complete with partial results?

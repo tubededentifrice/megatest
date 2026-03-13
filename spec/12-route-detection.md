@@ -369,7 +369,7 @@ Targeted discovery is a lightweight variant of full discovery (spec 08) that foc
 
    a. `open` the route URL (replace the route path into the `serve.ready` base URL).
 
-   b. `snapshot -i` to understand the page structure.
+   b. Inspect the page via `page.accessibility.snapshot()` and `page.content()` to understand the page structure.
 
    c. Identify key visual sections from the snapshot.
 
@@ -399,10 +399,7 @@ Targeted discovery is a lightweight variant of full discovery (spec 08) that foc
 
 4. **Generate workflow YAML files:** One file per discovered route. File names are derived from the route path: `/blog` -> `blog.yml`, `/settings/profile` -> `settings-profile.yml`.
 
-5. **Apply based on storage mode:** The generated files are applied through the same `POST /api/v1/discoveries/:id/apply` endpoint used by full discovery. Behavior depends on the project's `config_storage_mode`:
-   - **repo:** PR is created on the project repository.
-   - **server:** Config files are stored in the database.
-   - **config_repo:** PR is created on the config repository.
+5. **Apply:** The generated files are applied through the same `POST /api/v1/discoveries/:id/apply` endpoint used by full discovery. A PR is created on the config repo (which is the project repo itself when `config_repo_url` is not set).
 
 ### Performance
 
@@ -466,7 +463,7 @@ The `processRouteDetection` function follows this sequence:
 4. **Filter** changed files to routing-relevant paths.
 5. **Fast path**: if no relevant files changed, complete immediately.
 6. **Run parser(s)** on changed files (or full router config files if applicable).
-7. **Read existing workflows** from `.megatest/workflows/*.yml` (or from config source per `config_storage_mode`).
+7. **Read existing workflows** from `.megatest/workflows/*.yml` (from config repo or project repo depending on project's `config_repo_url`).
 8. **Compare** detected routes against workflow coverage.
 9. **Upsert** uncovered routes into `detected_routes` table.
 10. **Act** on uncovered routes per `re_discovery_mode` (enqueue targeted discovery or store suggestions).

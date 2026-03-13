@@ -7,7 +7,7 @@ Status: Draft
 Discovery is the process of automatically generating `.megatest/` config files for a project. An AI agent:
 
 1. Spins up the user's app (using the same Docker isolation as regular runs)
-2. Explores the app systematically using agent-browser
+2. Explores the app systematically using Playwright
 3. Identifies key pages, flows, and visual checkpoints
 4. Generates workflow configs with stable locators
 5. Creates a PR to the repo with the generated `.megatest/` directory
@@ -27,11 +27,11 @@ Discovery is a best-effort, additive process. It produces a PR for human review 
 
 ## 2. Discovery Agent Architecture
 
-The discovery agent is an LLM-powered process that uses agent-browser (a Rust CLI by Vercel Labs) to explore a running instance of the user's application and produce YAML config files.
+The discovery agent is an LLM-powered process that uses Playwright to explore a running instance of the user's application and produce YAML config files.
 
 ### What the Agent Has Access To
 
-- **agent-browser CLI** -- for navigation, snapshots, screenshots, and interaction
+- **Playwright** -- for navigation, screenshots, and interaction
 - **The app's URL** -- the application running inside a Docker container, identical to the environment used for regular Megatest runs
 - **Project metadata** -- repository name, detected tech stack (from package.json, requirements.txt, Gemfile, etc.), and any existing `.megatest/` config
 
@@ -42,13 +42,13 @@ The discovery agent is an LLM-powered process that uses agent-browser (a Rust CL
 - Make network requests to hosts outside the running app container
 - Persist any browser state between discovery sessions
 
-### agent-browser Capabilities Used
+### Playwright Capabilities Used
 
-The discovery agent relies on two core capabilities of agent-browser:
+The discovery agent relies on two core capabilities of Playwright:
 
-1. **`snapshot -i`** -- returns a structured list of all interactive elements on the current page, each tagged with a ref ID. This is the primary way the agent understands page structure without parsing raw HTML.
+1. **Accessibility tree / DOM inspection** -- `page.accessibility.snapshot()` returns a structured accessibility tree of the current page, and `page.content()` provides the full DOM for detailed inspection. These are the primary ways the agent understands page structure without parsing raw HTML.
 
-2. **Semantic locators** -- agent-browser supports `find testid`, `find role`, `find text`, and `find label` commands. These allow the agent to locate elements by their semantic meaning rather than brittle CSS paths. The agent uses these to build stable locator strategies in the generated config.
+2. **Locator methods** -- Playwright provides semantic locator methods such as `page.getByTestId()`, `page.getByRole()`, `page.getByLabel()`, `page.getByText()`, and `page.getByPlaceholder()`. These allow the agent to locate elements by their semantic meaning rather than brittle CSS paths. The agent uses these to build stable locator strategies in the generated config.
 
 
 ## 3. Discovery Flow
@@ -74,24 +74,21 @@ The auto-discovery flow:
 3. If the file does not exist, enqueue a discovery job and return the `discovery_id` in the project creation response.
 4. The discovery job runs the full setup detection (section 4) and exploration (section 3.2) flow.
 5. Discovery progress is visible in the UI via the project dashboard's onboarding card.
-6. On completion, behavior depends on the project's `config_storage_mode`:
-   - **repo (default):** The user is prompted to review results and create a PR (or auto-PR if configured).
-   - **server:** Config files are stored directly in the database. No PR needed.
-   - **config_repo:** A PR is created on the config repository.
+6. On completion, a PR is created on the config repo (which may be the project repo itself) with the generated `.megatest/` files.
 
 ### 3.2 Exploration Phase
 
 Once the app is running, the AI agent begins systematic exploration:
 
-1. Open the app's root URL in agent-browser
-2. Take a snapshot (`snapshot -i`) to understand the initial page structure
+1. Open the app's root URL in Playwright
+2. Inspect the accessibility tree (`page.accessibility.snapshot()`) to understand the initial page structure
 3. Identify global navigation elements -- nav bars, sidebars, menus, footer links
 4. Build a map of top-level sections by extracting links from navigation
 5. Systematically visit each major section/page
 
 For each page visited, the agent:
 
-- Takes a `snapshot -i` to catalog all interactive elements
+- Inspects the accessibility tree to catalog all interactive elements
 - Identifies the page's purpose (landing page, form, list view, detail view, etc.)
 - Notes key visual sections that are worth screenshotting as checkpoints
 - Records interactive elements (forms, buttons, tabs, modals) that indicate user flows
@@ -140,24 +137,24 @@ After the exploration phase maps out the page structure, the agent identifies co
 
 For each interaction step in a generated workflow, the agent must choose a locator strategy. Locators are ranked by stability -- how likely they are to survive code changes without breaking:
 
-| Priority | Locator Type | agent-browser Command | Stability | Example |
-|----------|-------------|----------------------|-----------|---------|
-| 1 | `testid` | `find testid "login-button"` | Most stable | `data-testid="login-button"` |
-| 2 | `role` + `name` | `find role "button" "Submit"` | Very stable | `<button>Submit</button>` |
-| 3 | `label` | `find label "Email address"` | Stable | `<label>Email address</label>` + associated input |
-| 4 | `text` | `find text "Get Started"` | Moderate | Visible text content of an element |
-| 5 | `placeholder` | CSS fallback | Less stable | `<input placeholder="Enter email">` |
-| 6 | `css` | CSS selector | Least stable | `.header > nav > a:nth-child(2)` |
+| Priority | Locator Type | Playwright Method | Stability |
+|----------|-------------|-------------------|-----------|
+| 1 | `testid` | `page.getByTestId("login-button")` | Most stable |
+| 2 | `role` + `name` | `page.getByRole("button", { name: "Submit" })` | Very stable |
+| 3 | `label` | `page.getByLabel("Email address")` | Stable |
+| 4 | `text` | `page.getByText("Get Started")` | Moderate |
+| 5 | `placeholder` | `page.getByPlaceholder("Enter email")` | Less stable |
+| 6 | `css` | `page.locator(".header > nav > a:nth-child(2)")` | Least stable |
 
 The agent's locator selection logic:
 
-1. Run `snapshot -i` to get all interactive elements with their attributes
+1. Inspect the accessibility tree and DOM to get all interactive elements with their attributes
 2. For each element the agent needs to interact with, check attributes in priority order
-3. If a `data-testid` attribute exists, use it (always preferred)
-4. If the element has an ARIA role and accessible name, use `role` + `name`
-5. If it is a form field with an associated `<label>`, use `label`
-6. If it has unique visible text (buttons, links), use `text`
-7. Fall back to `css` only when no semantic locator is available
+3. If a `data-testid` attribute exists, use `page.getByTestId()` (always preferred)
+4. If the element has an ARIA role and accessible name, use `page.getByRole()` with `name`
+5. If it is a form field with an associated `<label>`, use `page.getByLabel()`
+6. If it has unique visible text (buttons, links), use `page.getByText()`
+7. Fall back to `page.locator()` with CSS only when no semantic locator is available
 
 When the agent finishes discovery, if fewer than 30% of interactions used `testid` locators, it adds a recommendation to the discovery report:
 
@@ -248,15 +245,9 @@ steps:
   - screenshot: dashboard-main
 ```
 
-### Config Storage Mode Awareness
+### Config Output
 
-Config generation produces the same YAML files regardless of storage mode. The difference is in how the output is applied:
-
-- **Repo mode:** Files are committed to a branch and a PR is created via the GitHub API (section 5.3).
-- **Server mode:** Files are written to the `project_configs` table via `PUT /api/v1/projects/:id/config`.
-- **Config repo mode:** Files are committed to the config repository and a PR is created there.
-
-The `POST /api/v1/discoveries/:id/apply` endpoint handles all three modes transparently. The caller does not need to know the storage mode.
+Config generation always produces the same YAML files. On completion, a PR is created on the config repo (which is the project repo itself when `config_repo_url` is not set, or the separate config repo when it is). The `POST /api/v1/discoveries/:id/apply` endpoint handles this transparently.
 
 ### 3.6 Output
 
@@ -524,16 +515,7 @@ If `create_pr: false`:
 }
 ```
 
-**Server-side mode behavior:** When the project uses `config_storage_mode = 'server'`, the apply endpoint stores config files directly in the database. The `create_pr` parameter is ignored (no PR is possible). The response omits `pr_url` and `branch`:
-
-```json
-{
-  "files_applied": [".megatest/config.yml", ".megatest/workflows/homepage.yml"],
-  "storage_mode": "server"
-}
-```
-
-**Config repo mode behavior:** When the project uses `config_storage_mode = 'config_repo'`, the PR is created on the config repository (not the main project repo). The response includes the config repo's PR URL.
+**Config repo behavior:** The PR is created on the config repo. When `config_repo_url` is set, the PR targets that repository. Otherwise, the PR targets the project repository itself.
 
 ### 5.4 List Discoveries
 
@@ -577,16 +559,16 @@ state = {
 
 while not done:
   1. OBSERVE
-     - current_url = agent-browser current URL
-     - snapshot = agent-browser snapshot -i
-     - screenshot = agent-browser screenshot (for LLM vision if needed)
+     - current_url = page.url()
+     - snapshot = page.accessibility.snapshot() + page.content()
+     - screenshot = page.screenshot() (for LLM vision if needed)
 
   2. THINK
      - Send observation + state to LLM
      - LLM returns one or more structured actions
 
   3. ACT
-     - Execute each action via agent-browser
+     - Execute each action via Playwright API calls
      - Handle errors (element not found, navigation timeout, etc.)
 
   4. RECORD
@@ -635,17 +617,17 @@ Includes generated: ["login"]
 
 Project: acme-app (Next.js, detected from package.json)
 
-Page snapshot (from agent-browser snapshot -i):
-[ref=1] <nav role="navigation">
-  [ref=2] <a href="/">Home</a>
-  [ref=3] <a href="/dashboard">Dashboard</a>
-  [ref=4] <a href="/settings">Settings</a>
-[ref=5] <main>
-  [ref=6] <h1>Welcome back, User</h1>
-  [ref=7] <div class="stats-grid">
-    [ref=8] <div data-testid="total-users">1,234 users</div>
-    [ref=9] <div data-testid="revenue">$12,345</div>
-  [ref=10] <button>Export Report</button>
+Page accessibility tree (from page.accessibility.snapshot()):
+- navigation "Main"
+  - link "Home" -> /
+  - link "Dashboard" -> /dashboard
+  - link "Settings" -> /settings
+- main
+  - heading "Welcome back, User" [level=1]
+  - group "stats-grid"
+    - text "1,234 users" [data-testid="total-users"]
+    - text "$12,345" [data-testid="revenue"]
+  - button "Export Report"
 ```
 
 ### 6.3 LLM Output Format
@@ -783,7 +765,16 @@ After 3 consecutive failures on the same page, the agent skips to the next URL i
 
 ### 6.5 LLM Provider
 
-The discovery agent uses the same LLM provider as the rest of the Megatest platform. The specific model should be configurable but defaults to a capable vision model (for interpreting screenshots when snapshot data is ambiguous). Vision capability is optional -- the agent can operate purely on snapshot text when a vision model is not available.
+The discovery agent supports configurable LLM providers through a provider abstraction layer. Supported providers include Claude (Anthropic), GPT-4 (OpenAI), and any OpenAI-compatible API. The provider is configured via environment variables:
+
+- `LLM_PROVIDER`: `anthropic`, `openai`, or `openai_compatible`
+- `LLM_API_KEY`: API key for the configured provider
+- `LLM_MODEL`: Model identifier (e.g., `claude-sonnet-4-20250514`, `gpt-4o`)
+- `LLM_BASE_URL`: Base URL for OpenAI-compatible providers
+
+For the SaaS deployment, users configure their LLM API key in the organization settings. For self-hosted deployments, the environment variables are set directly.
+
+The specific model should default to a capable vision model (for interpreting screenshots when accessibility tree data is ambiguous). Vision capability is optional -- the agent can operate purely on accessibility tree text when a vision model is not available.
 
 
 ## 7. Limitations and Edge Cases
@@ -944,7 +935,7 @@ Example PR body:
 Re-discovery results are handled according to the project's `re_discovery_mode` setting (stored in project server-side settings):
 
 **Mode 1: Auto-PR** (`re_discovery_mode: 'auto_pr'`)
-- When new workflows are generated (from re-discovery or route detection), Megatest automatically creates a PR on the target repo (or config repo).
+- When new workflows are generated (from re-discovery or route detection), Megatest automatically creates a PR on the config repo (which may be the project repo itself).
 - The PR includes only new files. Existing workflows are never modified.
 - PR title: 'Add Megatest workflows for {N} new pages'
 - PR body includes the discovery report with confidence scores and recommendations.
@@ -953,6 +944,6 @@ Re-discovery results are handled according to the project's `re_discovery_mode` 
 - New uncovered routes are stored as suggestions in the `detected_routes` table.
 - The project's Discovery tab shows suggestions with 'Discover' buttons.
 - The user can discover individual routes or all uncovered routes at once.
-- After discovery completes, the user can review generated workflows and choose to create a PR or apply server-side.
+- After discovery completes, the user can review generated workflows and create a PR on the config repo.
 
 The mode is configurable per-project in the project settings tab.

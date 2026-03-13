@@ -2,7 +2,7 @@
 
 The worker is the most complex component of Megatest. It consumes jobs from a
 BullMQ queue, spins up isolated Docker containers for the user's application,
-drives a headless browser via `agent-browser` in the worker runtime
+drives a headless browser via Playwright in the worker runtime
 environment, performs pixel-level screenshot comparison with `pixelmatch`, and
 reports results back through the API and GitHub.
 
@@ -73,7 +73,7 @@ The `groupKey` ensures per-project serialization. Per-org limits are enforced by
 
 ### Retry Policy
 
-- **1 retry on infrastructure failure** -- Docker pull timeout, network error, OOM kill, agent-browser crash that cannot be recovered. BullMQ `attempts: 2` with `backoff: { type: 'fixed', delay: 5000 }`.
+- **1 retry on infrastructure failure** -- Docker pull timeout, network error, OOM kill, Playwright/Chromium crash that cannot be recovered. BullMQ `attempts: 2` with `backoff: { type: 'fixed', delay: 5000 }`.
 - **No retry on test failure** -- if the run completes but screenshots differ, the result is recorded as-is. Re-running is a manual action triggered from the UI or by pushing a new commit.
 
 Infrastructure failures are distinguished from test failures by error type. The `processRun` function throws a typed `InfrastructureError` for retryable conditions and returns normally (with a `fail` result) for test failures.
@@ -92,7 +92,7 @@ logic run alongside the worker process, outside the user app container.
 +-----------------------------+     +-------------------------+
 | Worker Runtime              |     | Docker Container        |
 |                             |     |                         |
-| agent-browser --- http://megatest-run:PORT ---> dev server |
+| Playwright --- http://megatest-run:PORT ---> dev server    |
 |   (Chromium)                |     |   (npm run dev)         |
 |                             |     |                         |
 | Worker process              |     |                         |
@@ -102,9 +102,9 @@ logic run alongside the worker process, outside the user app container.
 +-----------------------------+     +-------------------------+
 ```
 
-`agent-browser` and Chromium run alongside the worker process, not inside the
+Playwright and Chromium run alongside the worker process, not inside the
 user app container. The worker creates a per-run Docker bridge network and
-attaches the app container with a stable alias. `agent-browser` connects to the
+attaches the app container with a stable alias. Playwright connects to the
 rewritten `serve.ready` URL on that private network.
 
 ### Base Image
@@ -228,15 +228,13 @@ If no workflows are found, the run fails with error: "No workflow files found in
 
 ### Config Source Resolution
 
-The worker resolves config from one of three sources based on `project.config_storage_mode`:
+The worker resolves config from a Git repository based on the project's `config_repo_url`:
 
-1. **`repo` (default):** Read config from `.megatest/` in the cloned repository. This is the behavior described above.
+1. **`config_repo_url` is null or matches the project repo URL:** Read config from `.megatest/` in the cloned project repository. This is the behavior described above.
 
-2. **`server`:** Fetch config from the Megatest API via `GET /api/v1/projects/:id/config` (internal endpoint). The response contains all config files as a key-value map. Parse them identically to repo-side files.
+2. **`config_repo_url` points to a different repo:** Clone a second repository (`project.config_repo_url`) alongside the main repo. Read config from `.megatest/` in the config repo (optionally at a subdirectory path). The main repo is still cloned for app code.
 
-3. **`config_repo`:** Clone a second repository (`project.config_repo_url`) alongside the main repo. Read config from `.megatest/` in the config repo. The main repo is still cloned for app code.
-
-The `config_storage_mode` is included in the job data so the worker knows which source to use without an extra API call.
+The `config_repo_url` is included in the job data so the worker knows which source to use without an extra API call.
 
 ### 3.3 Docker Setup
 
@@ -300,76 +298,80 @@ checkpoint is classified as `new`.
 This is the core test execution phase. Each workflow is run against each
 configured viewport. Workflow/viewport pairs may execute in parallel.
 
-**Concurrency:** Up to 3 workflow/viewport pairs run concurrently (default). Each pair gets its own agent-browser session with its own Chromium instance.
+**Concurrency:** Up to 3 workflow/viewport pairs run concurrently (default). Each pair gets its own Playwright BrowserContext (not a separate Chromium process -- Playwright is more efficient with contexts, sharing a single browser instance across multiple isolated contexts).
 
 **Per workflow/viewport pair:**
 
 1. **Start a browser session:**
+   ```js
+   const browser = await chromium.launch({ headless: true });
+   const context = await browser.newContext({ viewport: { width, height } });
+   const page = await context.newPage();
    ```
-   agent-browser --session megatest-{runId}-{wf}-{vp} launch
-   ```
-   The session name is unique to this run, workflow, and viewport.
 
 2. **Set viewport:**
-   ```
-   agent-browser --session megatest-{runId}-{wf}-{vp} set viewport {width} {height}
+   ```js
+   await page.setViewportSize({ width, height });
    ```
 
 3. **Execute each step** in sequence:
 
-   Each step in the workflow config is mapped to an agent-browser CLI command. The mapping depends on the step type.
+   Each step in the workflow config is mapped to a Playwright API call. The mapping depends on the step type.
 
    **Step type mapping:**
 
-   | Step Type | agent-browser Command |
-   |-----------|----------------------|
-   | `open: <url>` | `open <url>` |
-   | `click: <locator>` | `find ...` then `click` |
-   | `fill: <locator+text>` | `find ...` then `fill {text}` |
-   | `type: <locator+text>` | `find ...` then `type {text}` |
-   | `select: <locator+value>` | `find ...` then `select {value}` |
-   | `hover: <locator>` | `find ...` then `hover` |
-   | `wait: <condition>` | `wait ...` |
-   | `screenshot: <name|config>` | `screenshot {outputPath}` |
-   | `scroll: <direction>` | `scroll ...` |
-   | `press: <key>` | `press <key>` |
-   | `eval: <javascript>` | `eval <javascript>` |
+   | Step Type | Playwright Implementation |
+   |-----------|--------------------------|
+   | `open: <url>` | `await page.goto(url)` |
+   | `click: <locator>` | `await resolveLocator(page, locator).click()` |
+   | `fill: <locator+text>` | `await resolveLocator(page, locator).fill(text)` |
+   | `type: <locator+text>` | `await resolveLocator(page, locator).pressSequentially(text)` |
+   | `select: <locator+value>` | `await resolveLocator(page, locator).selectOption(value)` |
+   | `hover: <locator>` | `await resolveLocator(page, locator).hover()` |
+   | `wait: <condition>` | `await page.waitForSelector(selector)` or `await page.waitForTimeout(ms)` |
+   | `screenshot: <name>` | `await page.screenshot({ path: outputPath, fullPage })` |
+   | `scroll: <direction>` | `await page.evaluate(() => window.scrollBy(0, pixels))` |
+   | `press: <key>` | `await page.keyboard.press(key)` |
+   | `eval: <js>` | `await page.evaluate(js)` |
    | `include: <name>` | (resolved during config parsing, not a runtime step) |
-   | `set-viewport: <viewport>` | `set viewport <width> <height>` |
+   | `set-viewport: <viewport>` | `await page.setViewportSize({ width, height })` |
 
-   **Semantic locators** are resolved from the step config to agent-browser `find` subcommands:
+   **Semantic locator resolution** maps step config locators to Playwright locator methods:
 
-   | Locator key | agent-browser find type |
-   |------------|-------------------------|
-   | `testid` | `find testid {value}` |
-   | `role` (+ optional `name`) | `find role {value}` |
-   | `text` | `find text {value}` |
-   | `label` | `find label {value}` |
-   | `placeholder` | `find placeholder {value}` |
-   | `css` | `find first {value}` |
-   | `nth` | `find nth {index} {selector}` |
+   ```ts
+   function resolveLocator(page: Page, locator: Locator): Locator {
+     if (locator.testid) return page.getByTestId(locator.testid);
+     if (locator.role) return page.getByRole(locator.role, { name: locator.name });
+     if (locator.label) return page.getByLabel(locator.label);
+     if (locator.text) return page.getByText(locator.text);
+     if (locator.placeholder) return page.getByPlaceholder(locator.placeholder);
+     if (locator.css) return page.locator(locator.css);
+     if (locator.xpath) return page.locator(locator.xpath);
+     throw new Error('No valid locator found');
+   }
+   ```
 
-   **Execution:** Each command is run via
-   `child_process.execFile('agent-browser', args)` with a per-step timeout
+   **Execution:** Each Playwright call is awaited with a per-step timeout
    (default 30s, configurable via `defaults.timeout`).
 
    **Screenshot steps:**
    - Output path: `/tmp/megatest-{runId}/screenshots/{workflow}/{name}/{viewport}.png`
-   - If `mode: full`, append `--full` flag to the screenshot command.
-   - If the screenshot config includes `selector`, capture that element rather
+   - If `mode: full`, pass `fullPage: true` to `page.screenshot()`.
+   - If the screenshot config includes `selector`, use
+     `page.locator(selector).screenshot()` to capture that element rather
      than the full page.
-   - The screenshot file is written by agent-browser directly to the worker
+   - The screenshot file is written by Playwright directly to the worker
      runtime filesystem (not inside the user app container).
 
    **Step failure handling:**
-   - If a step fails (non-zero exit, timeout), record the error on the step.
+   - If a step fails (Playwright error, timeout), record the error on the step.
    - Default behavior: abort the remaining steps in this workflow/viewport pair.
    - The config DSL does not support per-step `continueOnError` in schema v1.
      Recovery is therefore handled at the workflow/runner level, not in YAML.
 
-4. **Close the browser session:**
-   ```
-   agent-browser --session megatest-{runId}-{wf}-{vp} close
+4. **Close the browser:**
+   ```js
+   await browser.close();
    ```
 
 ### 3.6 Compare Screenshots
@@ -539,11 +541,11 @@ Cleanup runs unconditionally in a `finally` block, regardless of whether the run
    rm -rf /tmp/megatest-{runId}/
    ```
 
-4. **Close any remaining agent-browser sessions:**
+4. **Close any remaining Playwright browser instances:**
+   ```ts
+   await browser.close();
    ```
-   agent-browser --session megatest-{runId}-* close
-   ```
-   This uses a glob pattern to catch any sessions that were not properly closed during execution (e.g., due to an early abort).
+   This ensures all Chromium processes spawned by Playwright for this run are terminated, even if they were not properly closed during execution (e.g., due to an early abort).
 
 If cleanup itself fails (e.g., Docker daemon unreachable), the error is logged but does not affect the run result (which has already been recorded).
 
@@ -580,8 +582,8 @@ Each failure mode is handled specifically to provide actionable error messages.
 | `serve.ready` timeout | User config | Run fails. Message: "Server failed to start within {N}s". Includes last 50 lines of serve.cmd output. Not retryable. |
 | `serve.cmd` exits unexpectedly | User config | Run fails. Message: "Dev server exited with code {N}". Includes captured output. Not retryable. |
 | Step timeout | Test error | Checkpoint status = `error`. Message: "Step timed out after {N}s". Remaining steps in that workflow/viewport pair are skipped. Other pairs continue. |
-| agent-browser crash (mid-session) | Infrastructure | Attempt to restart the session and retry the current step once. If restart fails, mark all remaining checkpoints in that workflow/viewport pair as `error`. Other pairs continue. |
-| agent-browser crash (all sessions) | Infrastructure | Mark all remaining checkpoints as `error`. Run result = `error`. Retryable. |
+| Playwright/Chromium crash (mid-session) | Infrastructure | Attempt to relaunch the browser and retry the current step once. If relaunch fails, mark all remaining checkpoints in that workflow/viewport pair as `error`. Other pairs continue. |
+| Playwright/Chromium crash (all sessions) | Infrastructure | Mark all remaining checkpoints as `error`. Run result = `error`. Retryable. |
 | Out of memory (container OOM killed) | Infrastructure | Detected via container exit code 137. Run fails with "Container killed: out of memory". Retryable. |
 | Disk quota exceeded | Infrastructure | Run fails with "Container disk quota exceeded". Retryable. |
 | Unhandled exception | Infrastructure | Run fails. Error message and stack trace saved. Cleanup runs in `finally` block. Retryable. |
@@ -598,11 +600,11 @@ Each failure mode is handled specifically to provide actionable error messages.
 |-------|---------|-------|
 | Workers per instance | 2 | Each worker handles one run at a time. Configured via BullMQ `concurrency`. |
 | Concurrent runs per project | 1 | Enforced via BullMQ group concurrency on `projectId`. Prevents race conditions on baselines. |
-| Concurrent workflow/viewport pairs | 3 | Each pair gets its own agent-browser session (own Chromium process). Configured by the worker, not by schema v1. |
+| Concurrent workflow/viewport pairs | 3 | Each pair gets its own Playwright BrowserContext (sharing a single Chromium instance for efficiency). Configured by the worker, not by schema v1. |
 | Max concurrent Docker containers | 4 | Global semaphore across all workers in the process. Prevents resource exhaustion on the host. |
 
 **Why 1 concurrent run per project:** Baseline management requires serial execution. If two runs for the same project execute simultaneously, they could both read the same baselines, both generate "new" results, and create conflicting baseline records when approved. Serial execution per project avoids this entirely.
 
 **Why max 4 containers:** With 2 workers per instance and potential for retries, the theoretical max is already bounded. The container limit of 4 provides an additional safety net. On a host with 8 GB RAM and 4 CPU cores, 4 containers at 2 GB / 2 cores each would saturate resources. The limit should be tuned to the host's capacity.
 
-**Workflow/viewport parallelism:** Within a single run, up to 3 workflow/viewport pairs execute concurrently. Each launches its own agent-browser session, which spawns a separate Chromium process. This is the primary knob for trading speed against resource usage. The value of 3 is a conservative default for hosts with 8+ GB RAM.
+**Workflow/viewport parallelism:** Within a single run, up to 3 workflow/viewport pairs execute concurrently. Each gets its own Playwright BrowserContext, sharing a single Chromium browser instance for efficiency. Contexts are fully isolated (separate cookies, storage, etc.) without the overhead of separate OS processes. This is the primary knob for trading speed against resource usage. The value of 3 is a conservative default for hosts with 8+ GB RAM.

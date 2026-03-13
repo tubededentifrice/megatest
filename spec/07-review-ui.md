@@ -224,14 +224,19 @@ Each row links to the corresponding review page.
   │ [Save trigger rules]                                     │
   └──────────────────────────────────────────────────────────┘
 
-  Config Storage
+  Config Repository
   ────────────────
-  Choose where Megatest stores workflow configuration files.
+  Configure where Megatest workflow configuration files are stored.
 
-  ● Store in repository (.megatest/)        ← default
-  ○ Store server-side (no repo changes)
-  ○ Store in separate config repo
+  Config repo: [same as project repo      ▾]
+
+  ○ Use project repository (default)
+    Config is stored in .megatest/ alongside your application code.
+
+  ○ Use separate config repository
     Config repo URL: [________________________]
+    Branch: [main          ]
+    Path: [               ]  (subdirectory within config repo, leave empty for root)
 
   [Save]
 

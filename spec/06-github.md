@@ -12,7 +12,7 @@ Megatest integrates with GitHub via a **GitHub App**. This is the only VCS provi
 
 | Permission      | Access | Purpose                                  |
 |-----------------|--------|------------------------------------------|
-| Contents        | Write  | Clone repos, read `.megatest/` config, create discovery PR branches/commits |
+| Contents        | Write  | Clone repos, read config from config repo, create discovery PR branches/commits |
 | Pull requests   | Write  | Post and update PR comments              |
 | Commit statuses | Write  | Post check statuses on commits           |
 | Metadata        | Read   | Required by GitHub for all Apps          |
@@ -582,7 +582,7 @@ commit-message or merge-strategy heuristics.
 
 ### Config Repo Awareness
 
-When a project uses `config_storage_mode = 'config_repo'`, discovery PRs and auto-generated workflow updates target the config repository, not the main project repository. The main repo's `pull_request.closed` webhook still triggers baseline promotion and route detection as normal, but any resulting re-discovery PRs are created on the config repo.
+When a project uses a separate config repo (`config_repo_url` is set), discovery PRs target the config repo. Baseline promotion and route detection still use the project repo's webhooks.
 
 ---
 

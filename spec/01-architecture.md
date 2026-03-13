@@ -9,11 +9,11 @@ The core workflow:
 1. A GitHub webhook (push or PR) triggers a test run.
 2. The API server enqueues a job.
 3. A worker picks up the job, clones the repo, builds and starts the app in a Docker container.
-4. `agent-browser` (running on the worker host) connects to the containerized app and executes the test steps defined in `.megatest/`.
+4. Playwright (running on the worker host) connects to the containerized app and executes the test steps defined in `.megatest/`.
 5. Screenshots are captured, diffed against baselines with `pixelmatch`, and results are stored.
 6. Status is reported back to the GitHub commit/PR.
 
-A secondary flow -- the Discovery Agent -- uses an AI model to explore a running app, discover its workflows, and generate the `.megatest/` config files automatically. Users do not hand-write config.
+A secondary flow -- the Discovery Agent -- uses a configurable LLM (Claude, OpenAI, etc.) and Playwright to explore a running app, discover its workflows, and generate the `.megatest/` config files automatically. Users do not hand-write config.
 
 ---
 
@@ -43,8 +43,8 @@ Self-hosted deployment:
 │                        Worker Host                              │
 │                                                                 │
 │  ┌──────────────┐    ┌───────────────────┐    ┌──────────────┐  │
-│  │ agent-browser │───►│  Docker Container  │    │  pixelmatch  │  │
-│  │ (Chromium)    │    │  (user app on      │    │  (diffing)   │  │
+│  │  Playwright   │───►│  Docker Container  │    │  pixelmatch  │  │
+│  │  (Chromium)   │    │  (user app on      │    │  (diffing)   │  │
 │  │              │◄───│   localhost:PORT)   │    │              │  │
 │  └──────────────┘    └───────────────────┘    └──────────────┘  │
 │         │                                            │          │
@@ -106,14 +106,14 @@ Discovery Agent Flow:
          ▼
   ┌──────────────┐     ┌───────────────────┐
   │ Discovery    │────►│  Docker Container  │
-  │ Agent (AI)   │     │  (user app)        │
-  │ + agent-     │◄────│                    │
-  │   browser    │     └───────────────────┘
+  │ Agent        │     │  (user app)        │
+  │ (LLM +      │◄────│                    │
+  │  Playwright) │     └───────────────────┘
   └──────┬───────┘
          │ generates
          ▼
   ┌──────────────┐
-  │ .megatest/   │  ──► committed to repo via PR
+  │ .megatest/   │  ──► committed to config repo via PR
   │ config files │
   └──────────────┘
 ```
@@ -127,30 +127,30 @@ Discovery Agent Flow:
 | API Server | Node.js + Fastify | HTTP API, webhook receiver, GitHub OAuth, serves Web UI |
 | Web UI | Embedded SPA (vanilla JS or Preact) | Dashboard for runs, diffs, baseline approval |
 | Job Queue | BullMQ + Redis | Reliable job scheduling and delivery to workers |
-| Worker | Node.js process on host | Orchestrates container lifecycle, runs agent-browser, runs pixelmatch |
-| Browser Automation | `agent-browser` CLI (Rust, v0.17.1) | Headless Chromium control via semantic locators (`find testid`, `find role`, `find text`, `find label`) and element refs (`@e1`) |
+| Worker | Node.js process on host | Orchestrates container lifecycle, runs Playwright, runs pixelmatch |
+| Browser Automation | Playwright (npm) | Headless Chromium control via CSS selectors, role/text/testid/label locators, page.locator(), page.getByRole(), etc. |
 | Image Diffing | `pixelmatch` (npm) | Pixel-level screenshot comparison, produces diff images |
 | User App Isolation | Docker (one container per run) | Sandboxed execution of user code |
 | Database | PostgreSQL | Stores runs, projects, baselines, users, orgs, usage records |
 | Storage | Local filesystem or S3-compatible | Stores screenshot PNGs, baseline images, diff images |
 | Auth | GitHub OAuth | Multi-tenant login, repo-scoped access |
-| Config | `.megatest/` directory in repo | Test definitions, viewport settings, thresholds -- AI-generated |
-| Discovery Agent | AI model + agent-browser | Explores running app, discovers workflows, generates `.megatest/` config |
+| Config | `.megatest/` directory in config repo | Test definitions, viewport settings, thresholds — AI-generated. Config repo can be the project repo itself. |
+| Discovery Agent | Configurable LLM + Playwright | Explores running app, discovers workflows, generates `.megatest/` config |
 
 ---
 
 ## 4. Key Design Decisions
 
-### 4.1 agent-browser for browser automation
+### 4.1 Playwright for browser automation
 
-`agent-browser` is a Rust-based headless browser CLI by Vercel Labs. It is chosen over Playwright/Puppeteer because:
+Playwright is the industry-standard browser automation library, maintained by Microsoft. It is chosen because:
 
-- Semantic locators (`find testid`, `find role`, `find text`, `find label`) map naturally to how an AI agent reasons about a page, making Discovery Agent output more robust.
-- Element refs (`@e1`, `@e2`) from snapshots provide a stable addressing scheme within a session.
-- Single statically-linked binary, no Node.js browser dependency management.
-- Installed in the worker runtime environment -- either on the host in a
-  bare-metal deployment or inside the dedicated `worker` service image in a
-  containerized deployment.
+- Flexible locator strategies: CSS selectors, XPath, role-based (`page.getByRole()`), text-based (`page.getByText()`), testid-based (`page.getByTestId()`), and label-based (`page.getByLabel()`).
+- Maintained by Microsoft with a huge ecosystem, excellent documentation, and active community.
+- Supports all major browsers (Chromium, Firefox, WebKit), though Megatest uses headless Chromium.
+- First-class Node.js API — installed as an npm dependency in the worker.
+- Built-in screenshot, network interception, and waiting primitives.
+- Installed in the worker runtime environment via `npx playwright install chromium`.
 
 ### 4.2 Docker per run for worker isolation
 
@@ -160,14 +160,14 @@ User application code is untrusted. Each run gets a fresh Docker container that:
 - Is not reachable from the public network.
 - Runs with resource limits (CPU, memory, timeout).
 
-`agent-browser` and Chromium run alongside the worker process, not inside the
+Playwright and Chromium run alongside the worker process, not inside the
 user app container. In a bare-metal deployment they run on the host; in Docker
 Compose they run inside the `worker` service container. The user app container
 joins a per-run Docker network that is only reachable from the worker runtime.
 
 ### 4.3 pixelmatch for image diffing
 
-`pixelmatch` is a small, fast, dependency-free library for pixel-level image comparison. It is used instead of agent-browser's built-in capabilities because:
+`pixelmatch` is a small, fast, dependency-free library for pixel-level image comparison. It is used as a dedicated diffing layer because:
 
 - Diffing is a distinct concern from browser automation.
 - `pixelmatch` produces configurable threshold-based diffs with anti-aliasing detection.
@@ -190,13 +190,19 @@ BullMQ provides:
 
 PostgreSQL is the sole database backend. This simplifies the data layer by eliminating dialect abstraction and enables use of PostgreSQL-native features (UUID, TIMESTAMPTZ, JSONB, advisory locks). Self-hosted deployments include a PostgreSQL container in the Docker Compose stack.
 
-### 4.7 `.megatest/` directory (not a single YAML file)
+### 4.7 `.megatest/` directory in a config repo
 
-Config is split across multiple files inside `.megatest/` so that:
+Config lives in a Git repository — either a dedicated config repo or the project repo itself. The `.megatest/` directory is split across multiple files so that:
 
 - An AI agent (Discovery Agent or external LLM) can read/write individual files without loading the entire config.
 - Individual test workflows can be added, removed, or modified independently.
 - Merge conflicts are minimized.
+
+The config repo approach means:
+
+- Megatest doesn't need write access to the project repo.
+- Config changes are version-controlled and reviewable.
+- Teams can share a single config repo for multiple projects.
 
 Users do not write these files. The Discovery Agent generates them.
 
@@ -218,8 +224,8 @@ All tenants share a pool of worker machines. Isolation is enforced at multiple l
 ## 5. Deployment Model
 
 Self-hosted deployment uses Docker Compose with three long-lived services. The
-`worker` service image includes `agent-browser` and Chromium so the runtime is
-self-contained.
+`worker` service image includes Playwright and Chromium (installed via
+`npx playwright install chromium`) so the runtime is self-contained.
 
 ### 5.1 docker-compose.yml
 
@@ -269,7 +275,6 @@ services:
       - S3_SECRET_KEY=${S3_SECRET_KEY:-}
       - WORKER_CONCURRENCY=${WORKER_CONCURRENCY:-2}
       - DOCKER_HOST=${DOCKER_HOST:-unix:///var/run/docker.sock}
-      - AGENT_BROWSER_PATH=${AGENT_BROWSER_PATH:-/usr/local/bin/agent-browser}
     volumes:
       - data:/data
       - /var/run/docker.sock:/var/run/docker.sock
@@ -319,7 +324,6 @@ volumes:
 | `S3_SECRET_KEY` | No | -- | S3 secret key |
 | `WORKER_CONCURRENCY` | No | `2` | Max parallel test runs per worker |
 | `DOCKER_HOST` | No | `unix:///var/run/docker.sock` | Docker daemon socket |
-| `AGENT_BROWSER_PATH` | No | `/usr/local/bin/agent-browser` | Path to the agent-browser binary in the worker runtime |
 | `SESSION_COOKIE_SECURE` | No | `false` on localhost | Set `true` behind HTTPS. Allows local self-hosted login on `http://localhost`. |
 
 ---
@@ -327,13 +331,13 @@ volumes:
 ## 6. Network Topology
 
 The critical network relationship is between the worker runtime
-(`agent-browser` + Chromium + worker process) and the user's application
+(Playwright + Chromium + worker process) and the user's application
 container.
 
 ```
 Worker Runtime (host process or worker service container)
-├── agent-browser process
-│   └── controls embedded Chromium
+├── Playwright (Node.js)
+│   └── controls headless Chromium
 │       └── navigates to http://megatest-run-{id}:{APP_PORT}
 │
 ├── Per-run Docker network
@@ -351,8 +355,8 @@ Worker Runtime (host process or worker service container)
    such as `megatest-run-{id}`.
 3. Worker waits for a health check on the configured `serve.ready` URL,
    rewritten to the container alias on the run network.
-4. Worker launches `agent-browser` pointing at the rewritten URL.
-5. `agent-browser` executes the steps from `.megatest/` config: navigating pages, taking snapshots, capturing screenshots.
+4. Worker launches Playwright pointing at the rewritten URL.
+5. Playwright executes the steps from `.megatest/` config: navigating pages, interacting with elements, capturing screenshots.
 6. On completion (or timeout), the worker removes the container and the per-run
    network.
 
@@ -363,7 +367,7 @@ Worker Runtime (host process or worker service container)
 | User code cannot accept public inbound traffic | The app container is attached only to a per-run private Docker network |
 | User code cannot reach other runs | Each run uses its own isolated bridge network |
 | Worker/browser is isolated from user filesystem | User code runs in a separate container with only the mounted repo path |
-| agent-browser cannot be hijacked | It connects outbound to the app container; no public listener is exposed |
+| Playwright cannot be hijacked | It connects outbound to the app container; no public listener is exposed |
 | Runs are ephemeral | Container is `--rm`; filesystem is destroyed on exit |
 
 MVP note: outbound egress from the app container is allowed during setup and

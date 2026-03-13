@@ -868,6 +868,16 @@ When Megatest is deployed via Docker Compose for self-hosting, the SaaS platform
 
 Self-hosted mode is activated by setting `SELF_HOSTED=true` in the environment.
 
+The operator must also configure the following environment variables:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `SELF_HOSTED` | Yes | Set to `true` to enable self-hosted mode |
+| `LLM_PROVIDER` | Yes | LLM provider for discovery: `anthropic`, `openai`, or `openai_compatible` |
+| `LLM_API_KEY` | Yes | API key for the configured LLM provider |
+| `LLM_MODEL` | No | Model identifier (defaults vary by provider) |
+| `LLM_BASE_URL` | No | Base URL for OpenAI-compatible providers |
+
 ### Behavioral Differences
 
 | Concern | SaaS | Self-Hosted |

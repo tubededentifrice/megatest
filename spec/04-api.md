@@ -284,6 +284,7 @@ provided `installation_id` to fetch repository details from the GitHub API.
     "name": "octocat/hello-world",
     "repo_url": "https://github.com/octocat/hello-world",
     "default_branch": "main",
+    "config_repo_url": null,
     "is_active": true,
     "settings": {},
     "created_at": "2026-03-13T10:00:00Z"
@@ -365,6 +366,7 @@ Returns full details for a single project.
     "name": "octocat/hello-world",
     "repo_url": "https://github.com/octocat/hello-world",
     "default_branch": "main",
+    "config_repo_url": null,
     "is_active": true,
     "settings": {
       "tracked_branches": ["main", "release/*"],
@@ -407,6 +409,7 @@ fields are changed.
     "name": "octocat/hello-world",
     "repo_url": "https://github.com/octocat/hello-world",
     "default_branch": "develop",
+    "config_repo_url": null,
     "is_active": true,
     "settings": {
       "tracked_branches": ["main", "release/*"],
@@ -1072,12 +1075,13 @@ Trigger rules are evaluated by the webhook handler before creating runs. If no r
 
 #### GET /api/v1/projects/:id/config
 
-Returns the project's current config files, regardless of storage mode.
+Returns the project's current config files by reading from the config repo
+(or the project repo itself if no separate config repo is configured).
 
 **Response: 200**
 ```json
 {
-  "storage_mode": "repo",
+  "config_repo_url": null,
   "files": {
     "config.yml": "version: \"1\"\nsetup:\n  install:\n    - npm ci\n...",
     "workflows/homepage.yml": "name: homepage\n..."
@@ -1085,13 +1089,10 @@ Returns the project's current config files, regardless of storage mode.
 }
 ```
 
-#### PUT /api/v1/projects/:id/config
-
-Sets config files for server-side storage mode. Returns 409 if the project uses repo-side storage.
-
-**Request body:**
+When a separate config repo is configured:
 ```json
 {
+  "config_repo_url": "https://github.com/org/megatest-config.git",
   "files": {
     "config.yml": "version: \"1\"\nsetup:\n  install:\n    - npm ci\n...",
     "workflows/homepage.yml": "name: homepage\n..."
@@ -1099,28 +1100,40 @@ Sets config files for server-side storage mode. Returns 409 if the project uses 
 }
 ```
 
-**Response: 200**
+#### PATCH /api/v1/projects/:id/config-repo
+
+Sets or changes the config repository for a project.
+
+**Request body:**
+
+| Field               | Type   | Required | Description |
+|---------------------|--------|----------|-------------|
+| `config_repo_url`   | string | yes      | HTTPS clone URL of the config repo, or `null` to use the project repo. |
+| `config_repo_branch`| string | no       | Branch to read config from. Default: repo's default branch. |
+| `config_repo_path`  | string | no       | Subdirectory within the config repo. Default: root. |
+
+To set a separate config repo:
 ```json
 {
-  "files_updated": ["config.yml", "workflows/homepage.yml"]
+  "config_repo_url": "https://github.com/org/megatest-config.git",
+  "config_repo_branch": "main",
+  "config_repo_path": "my-project"
 }
 ```
 
-#### PATCH /api/v1/projects/:id/config-mode
-
-Switches the config storage mode for a project.
-
-**Request body:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `mode` | string | yes | `repo`, `server`, or `config_repo` |
-| `config_repo_url` | string | conditional | Required when mode is `config_repo` |
+To switch to reading config from the project repo itself (no separate config repo):
+```json
+{
+  "config_repo_url": null
+}
+```
 
 **Response: 200**
 ```json
 {
-  "config_storage_mode": "server",
-  "migration_status": "completed"
+  "config_repo_url": "https://github.com/org/megatest-config.git",
+  "config_repo_branch": "main",
+  "config_repo_path": "my-project"
 }
 ```
 
@@ -1131,7 +1144,7 @@ Switches the config storage mode for a project.
 #### POST /api/v1/projects/:id/discover
 
 Triggers AI-powered workflow discovery for the project. The server clones the
-repository, starts the app, explores it with `agent-browser`, and generates
+repository, starts the app, explores it with `Playwright`, and generates
 `.megatest/` configuration files in the canonical schema from spec 02.
 
 **Request body:**
@@ -1224,8 +1237,10 @@ Returns the current status and results of a discovery job.
 
 #### POST /api/v1/discoveries/:id/apply
 
-Takes the discovery results and creates a pull request on the repository
-containing the generated `.megatest/` configuration files.
+Takes the discovery results and creates a pull request containing the
+generated `.megatest/` configuration files. The PR is created on the config
+repo (which may be the project repo itself when `config_repo_url` is null,
+or a separate config repo when set).
 
 **Response: 201**
 

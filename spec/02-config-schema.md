@@ -9,15 +9,19 @@ Megatest configuration is not a single file. It is a `.megatest/` directory cont
 
 All YAML files in the `.megatest/` directory MUST be valid YAML 1.2. Parsers MUST reject files with syntax errors rather than attempting partial interpretation.
 
-### Storage Modes
+### Config Repository
 
-This schema is the canonical format regardless of where config is stored. Megatest supports three storage modes (see spec 11 for details):
+This schema is the canonical format regardless of where config is stored. Config always lives in a Git repository:
 
-- **Repo-side** (default): Config lives in `.megatest/` in the project repository. Discovery creates PRs to add or update config files.
-- **Server-side**: Config is stored in Megatest's database using the same file/directory structure. No files are committed to the repository. The worker fetches config from the Megatest API.
-- **Config repo**: Config lives in a separate Git repository. The worker clones both the project repo (for app code) and the config repo (for test config). Discovery PRs target the config repo.
+- By default, config lives in a **dedicated config repo**. Discovery creates PRs to add or update config files on the config repo.
+- Alternatively, the project can be configured so that config lives in the **project repository itself**, under `.megatest/`.
 
-In all modes, the YAML format and validation rules described in this spec apply identically.
+The project's `config_repo_url` setting determines the source:
+
+- When `config_repo_url` is **null or matches the project repo URL**, config is read from `.megatest/` in the project repo.
+- When `config_repo_url` points to a **different repo**, config is read from that repo (optionally at a subdirectory path).
+
+In both cases, the YAML format and validation rules described in this spec apply identically.
 
 ## 2. Directory Structure
 
@@ -274,7 +278,7 @@ Navigate the browser to a URL.
 - **Value type:** `string`
 - **Required fields:** The URL string.
 - **Variable interpolation:** Yes.
-- **Maps to:** `agent-browser open <url>`
+- **Maps to:** `page.goto(url)`
 - **Behavior:** Navigates to the URL, then waits according to `defaults.waitAfterNavigation`.
 
 ### 6.2 `click`
@@ -286,7 +290,7 @@ Click an element identified by a locator.
 ```
 
 - **Value type:** `Locator` (see Section 7).
-- **Maps to:** `agent-browser find <locator-type> <locator-value> click` (with appropriate flags per locator type).
+- **Maps to:** `page.locator(selector).click()` (locator resolved via Playwright semantic locators; see Section 7).
 
 ### 6.3 `fill`
 
@@ -300,7 +304,7 @@ Clear an input field and type new text into it.
 
 - **Value type:** `Locator` (see Section 7) extended with a required `text` field.
 - **`text`:** The string to fill. Variable interpolation applies.
-- **Maps to:** `agent-browser find <locator-type> <locator-value> fill "<text>"`
+- **Maps to:** `page.locator(selector).fill(text)`
 - **Behavior:** The existing field content is cleared before filling.
 
 ### 6.4 `type`
@@ -314,7 +318,7 @@ Type text into an element without clearing existing content first.
 ```
 
 - **Value type:** Same shape as `fill`.
-- **Maps to:** `agent-browser find <locator-type> <locator-value> type "<text>"`
+- **Maps to:** `page.locator(selector).pressSequentially(text)`
 
 ### 6.5 `hover`
 
@@ -325,7 +329,7 @@ Hover over an element.
 ```
 
 - **Value type:** `Locator` (see Section 7).
-- **Maps to:** `agent-browser find <locator-type> <locator-value> hover`
+- **Maps to:** `page.locator(selector).hover()`
 
 ### 6.6 `select`
 
@@ -339,7 +343,7 @@ Select an option from a `<select>` element.
 
 - **Value type:** `Locator` extended with a required `value` field.
 - **`value`:** The option value to select.
-- **Maps to:** `agent-browser find <locator-type> <locator-value> select ... "<value>"`
+- **Maps to:** `page.locator(selector).selectOption(value)`
 
 ### 6.7 `wait`
 
@@ -367,11 +371,11 @@ Wait for a condition to be met.
 
 | Form | Value Type | Maps To |
 |------|-----------|---------|
-| `wait: 2000` | `number` | `agent-browser wait 2000` |
-| `wait: { text: "x" }` | `object` | `agent-browser wait --text "x"` |
-| `wait: { css: ".x" }` | `object` | `agent-browser find first ".x"` then `agent-browser wait @ref` |
-| `wait: { testid: "x" }` | `object` | `agent-browser find testid "x"` then `agent-browser wait @ref` |
-| `wait: { load: "networkidle" }` | `object` | `agent-browser wait --load networkidle` |
+| `wait: 2000` | `number` | `page.waitForTimeout(2000)` |
+| `wait: { text: "x" }` | `object` | `page.getByText("x").waitFor()` |
+| `wait: { css: ".x" }` | `object` | `page.waitForSelector(".x")` |
+| `wait: { testid: "x" }` | `object` | `page.getByTestId("x").waitFor()` |
+| `wait: { load: "networkidle" }` | `object` | `page.waitForLoadState("networkidle")` |
 
 - When `wait` is a number, it must be a non-negative integer. A value of `0` is valid (no-op).
 - When `wait` is an object, exactly one key must be present.
@@ -404,7 +408,7 @@ Capture a screenshot for visual comparison.
 | `selector` | `string` | No | -- | CSS selector to capture a specific element instead of the full viewport/page. |
 | `mask` | `array of string` | No | `[]` | CSS selectors for regions to ignore during comparison (dynamic timestamps, ads, live counters, etc.). |
 
-- **Maps to:** `agent-browser screenshot <path>` with `--full` flag when `mode: full`.
+- **Maps to:** `page.screenshot({ path })` with `fullPage: true` when `mode: full`.
 - The output path is determined by the runner: `<workflow-name>/<viewport-name>/<screenshot-name>.png`.
 - Screenshot names MUST be unique within a single workflow. Duplicate names within the same workflow are a validation error. Different workflows may reuse the same screenshot name.
 - When `mask` is present, the runner removes or neutralizes the matching regions
@@ -422,7 +426,7 @@ Scroll the page.
 - **Value type:** `object` with exactly one key.
 - **`down`:** Scroll down by N pixels. Positive integer.
 - **`up`:** Scroll up by N pixels. Positive integer.
-- **Maps to:** `agent-browser scroll down <n>` or `agent-browser scroll up <n>`
+- **Maps to:** `page.evaluate(() => window.scrollBy(0, n))` or `page.evaluate(() => window.scrollBy(0, -n))`
 - Specifying both `down` and `up` in the same step is a validation error.
 
 ### 6.10 `press`
@@ -436,7 +440,7 @@ Press a keyboard key or key combination.
 - **Value type:** `string`
 - **Description:** The key or key combination to press. Uses Playwright key naming conventions.
 - **Examples:** `"Enter"`, `"Tab"`, `"Escape"`, `"Control+a"`, `"Meta+Shift+p"`
-- **Maps to:** `agent-browser press <key>`
+- **Maps to:** `page.keyboard.press(key)`
 
 ### 6.11 `eval`
 
@@ -448,7 +452,7 @@ Evaluate arbitrary JavaScript in the browser context.
 
 - **Value type:** `string`
 - **Description:** JavaScript code to execute in the page context. Supports variable interpolation.
-- **Maps to:** `agent-browser eval "<javascript>"`
+- **Maps to:** `page.evaluate(javascript)`
 - **Security note:** The runner does not sandbox `eval` beyond the browser context. This is acceptable because Megatest runs in disposable containers.
 
 ### 6.12 `include`
@@ -478,7 +482,7 @@ Change the browser viewport dimensions mid-workflow.
 - **Value type:** `string` or `Viewport`.
 - When a string, it must reference a named viewport from `config.yml`.
 - When an object, it must contain `width` and `height` (both required, positive integers).
-- **Maps to:** `agent-browser set viewport <width> <height>`
+- **Maps to:** `page.setViewportSize({ width, height })`
 
 ## 7. Locator Type
 
@@ -486,15 +490,16 @@ A Locator identifies a DOM element for interaction. It is a YAML object with exa
 
 ### 7.1 Locator Keys
 
-| Key | Value Type | Description | agent-browser Command |
-|-----|-----------|-------------|----------------------|
-| `testid` | `string` | Matches `data-testid` attribute | `find testid "<value>"` |
-| `role` | `string` | ARIA role. Optionally combined with `name`. | `find role <value>` (+ `--name "<name>"` if `name` is present) |
-| `text` | `string` | Visible text content (exact or substring match) | `find text "<value>"` |
-| `label` | `string` | Associated `<label>` text or `aria-label` | `find label "<value>"` |
-| `placeholder` | `string` | `placeholder` attribute value | `find placeholder "<value>"` |
-| `css` | `string` | CSS selector (matches first element) | `find first "<value>"` |
-| `nth` | `object` | CSS selector + zero-based index | `find nth <index> "<selector>"` |
+| Key | Value Type | Description | Playwright Method |
+|-----|-----------|-------------|-------------------|
+| `testid` | `string` | Matches `data-testid` attribute | `page.getByTestId(value)` |
+| `role` | `string` | ARIA role. Optionally combined with `name`. | `page.getByRole(role, { name })` |
+| `text` | `string` | Visible text content (exact or substring match) | `page.getByText(value)` |
+| `label` | `string` | Associated `<label>` text or `aria-label` | `page.getByLabel(value)` |
+| `placeholder` | `string` | `placeholder` attribute value | `page.getByPlaceholder(value)` |
+| `css` | `string` | CSS selector (matches first element) | `page.locator(cssSelector)` |
+| `xpath` | `string` | XPath expression | `page.locator(xpathSelector)` |
+| `nth` | `object` | CSS selector + zero-based index | `page.locator(selector).nth(index)` |
 
 ### 7.2 Locator Constraints
 
@@ -519,8 +524,9 @@ When an AI agent generates configuration, it SHOULD prefer locator types in this
 3. `label` -- Tied to form structure; stable for form interactions.
 4. `text` -- Depends on visible copy; breaks on text changes.
 5. `placeholder` -- Depends on placeholder copy; breaks on text changes.
-6. `css` -- Tied to DOM structure; most brittle.
-7. `nth` -- Positional; most brittle of all.
+6. `css` -- Tied to DOM structure; brittle.
+7. `xpath` -- Tied to DOM structure; brittle (similar to `css`).
+8. `nth` -- Positional; most brittle of all.
 
 This ordering is advisory. The runner does not enforce it.
 
@@ -756,6 +762,7 @@ type Locator =
   | { label: string }
   | { placeholder: string }
   | { css: string }
+  | { xpath: string }
   | { nth: NthLocator };
 
 interface NthLocator {
@@ -1043,6 +1050,11 @@ The following JSON Schema can be used for programmatic validation of `config.yml
           "additionalProperties": false
         },
         {
+          "required": ["xpath"],
+          "properties": { "xpath": { "type": "string" } },
+          "additionalProperties": false
+        },
+        {
           "required": ["nth"],
           "properties": {
             "nth": {
@@ -1100,6 +1112,14 @@ The following JSON Schema can be used for programmatic validation of `config.yml
           "required": ["css", "text"],
           "properties": {
             "css": { "type": "string" },
+            "text": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        {
+          "required": ["xpath", "text"],
+          "properties": {
+            "xpath": { "type": "string" },
             "text": { "type": "string" }
           },
           "additionalProperties": false
@@ -1163,6 +1183,14 @@ The following JSON Schema can be used for programmatic validation of `config.yml
           "required": ["css", "value"],
           "properties": {
             "css": { "type": "string" },
+            "value": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        {
+          "required": ["xpath", "value"],
+          "properties": {
+            "xpath": { "type": "string" },
             "value": { "type": "string" }
           },
           "additionalProperties": false
@@ -1401,7 +1429,7 @@ If `setup.serve.cmd` exits before the `ready` URL returns 200, the run fails imm
 
 ### 13.6 Step Timeout
 
-Each step has an implicit timeout (from `defaults.timeout` or the global default of 30000ms). If a step does not complete within this timeout, it fails and the workflow run is aborted. The timeout applies to the agent-browser command execution, not to the YAML parsing.
+Each step has an implicit timeout (from `defaults.timeout` or the global default of 30000ms). If a step does not complete within this timeout, it fails and the workflow run is aborted. The timeout applies to the Playwright action execution, not to the YAML parsing.
 
 ### 13.7 Variable Interpolation in Non-String Contexts
 

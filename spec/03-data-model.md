@@ -110,8 +110,7 @@ CREATE TABLE projects (
     repo_url          TEXT NOT NULL,              -- https clone URL
     repo_id           INTEGER NOT NULL,           -- GitHub's numeric repo ID
     default_branch    TEXT DEFAULT 'main',
-    config_storage_mode TEXT NOT NULL DEFAULT 'repo',  -- repo|server|config_repo
-    config_repo_url   TEXT,                       -- URL of separate config repo (when config_storage_mode = 'config_repo')
+    config_repo_url   TEXT,                       -- URL of the config repo. When NULL, config is read from the project repo itself.
     settings          JSONB,                      -- operational settings only (e.g. branch filters, run timeout)
     secrets           JSONB,                      -- encrypted project secrets for ${env:VAR}
     trigger_rules     JSONB,                      -- per-project trigger configuration (see spec 13)
@@ -119,21 +118,6 @@ CREATE TABLE projects (
     created_at        TIMESTAMPTZ DEFAULT now(),
     updated_at        TIMESTAMPTZ DEFAULT now(),
     UNIQUE(repo_id)
-);
-```
-
-### project_configs
-
-Server-side configuration storage for projects that use `config_storage_mode = 'server'`.
-
-```sql
-CREATE TABLE project_configs (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    project_id      UUID NOT NULL REFERENCES projects(id),
-    file_path       TEXT NOT NULL,              -- relative path, e.g. "config.yml" or "workflows/login.yml"
-    content         TEXT NOT NULL,              -- raw YAML content
-    updated_at      TIMESTAMPTZ DEFAULT now(),
-    UNIQUE(project_id, file_path)
 );
 ```
 
@@ -353,9 +337,6 @@ CREATE INDEX idx_memberships_organization_id ON memberships(organization_id);
 
 -- Projects by organization
 CREATE INDEX idx_projects_organization_id ON projects(organization_id);
-
--- Server-side config lookup
-CREATE INDEX idx_project_configs_project_id ON project_configs(project_id);
 
 -- Usage records by org and period
 CREATE INDEX idx_usage_records_org_period ON usage_records(organization_id, period_start);
