@@ -2,9 +2,9 @@
 
 ## What is Megatest?
 
-Megatest is an open-source visual regression testing SaaS. It detects unintended visual changes in web applications by comparing screenshots across commits.
+Megatest is a visual regression testing SaaS (hosted at megatest.dev) with an open-source self-hosting option. It detects unintended visual changes in web applications by comparing screenshots across commits.
 
-**How it differs from CLI-based visual testing tools:** Megatest is an external service, not a test runner inside your repo. The only repo-side artifact is a `.megatest/` config directory (AI-generated, not hand-written). Everything else — baselines, diffs, approvals, history — lives in the SaaS.
+**How it differs from CLI-based visual testing tools:** Megatest is an external service, not a test runner inside your repo. It auto-discovers your application's workflows via an AI agent — users don't write config at all. The only repo-side artifact is a `.megatest/` config directory (AI-generated, not hand-written). Everything else — baselines, diffs, approvals, history — lives in the SaaS.
 
 ## Core Flow
 
@@ -33,9 +33,13 @@ Megatest is an open-source visual regression testing SaaS. It detects unintended
 | Worker isolation | Docker per run | User code runs in containers; browser runs on host |
 | Git provider | GitHub only (MVP) | GitLab is a future extension |
 | Job queue | BullMQ + Redis | Reliable, supports concurrency controls and retries |
-| Database | SQLite (single-node) / PostgreSQL (scaled) | Simple default, scales when needed |
+| Database | PostgreSQL | Simplifies deployment, required for concurrent SaaS operation |
 | API framework | Fastify | Fast, schema validation, plugin ecosystem |
 | Web UI | Embedded SPA (vanilla JS or Preact) | Served by API server, no separate build for MVP |
+| Deployment model | Hosted SaaS + open-source self-hosting | megatest.dev as primary, Docker Compose for self-hosted |
+| Config storage | Repo-side by default, server-side option, config-repo option | Same YAML format in all modes; dual storage for flexibility |
+| Trigger configuration | Server-side project settings | Operational config, not test definition; avoids bootstrap problem |
+| Pricing | Free tier + usage-based paid | Free for small projects (500 screenshots/month, 3 projects), paid per screenshot/run |
 
 ## Spec Documents
 
@@ -49,6 +53,11 @@ Megatest is an open-source visual regression testing SaaS. It detects unintended
 | 06 | [GitHub Integration](06-github.md) | GitHub App, OAuth, commit statuses, PR comments |
 | 07 | [Review UI](07-review-ui.md) | Web interface, image viewing modes, approval workflow |
 | 08 | [Discovery](08-discovery.md) | AI-powered workflow generation |
+| 09 | [SaaS Platform](09-saas-platform.md) | Multi-tenancy, pricing, quotas, billing, resource isolation |
+| 10 | [Onboarding](10-onboarding.md) | Zero-config signup flow, auto-discovery trigger |
+| 11 | [Config Storage](11-config-storage.md) | Dual storage model (repo-side, server-side, config-repo) |
+| 12 | [Route Detection](12-route-detection.md) | Framework-specific route detection for auto re-discovery |
+| 13 | [Trigger Rules](13-trigger-rules.md) | Server-side per-project trigger configuration |
 
 ## Project Structure
 
@@ -112,23 +121,26 @@ megatest/
 
 ## Implementation Phases
 
-### Phase 1: Config + Worker Core
-Parse `.megatest/` configs, clone repos, set up Docker containers, execute workflows via agent-browser, capture screenshots.
+### Phase 1: Database + Core Pipeline
+PostgreSQL schema, clone, Docker, agent-browser, screenshot, pixelmatch.
 
-### Phase 2: Storage + Comparison
-Local filesystem storage, pixelmatch diffing, baseline management.
+### Phase 2: GitHub Integration
+GitHub App, OAuth, webhooks, commit statuses, PR comments.
 
-### Phase 3: Database + API
-Schema, REST API, webhook receiver, session auth.
+### Phase 3: Review UI
+Review page, dashboard, project page, approval workflow.
 
-### Phase 4: GitHub Integration
-GitHub App setup, OAuth, commit statuses, PR comments.
+### Phase 4: SaaS Platform Basics
+Org model, free tier quotas, trigger rules.
 
-### Phase 5: Review UI
-The review page with side-by-side/overlay/slider views and approval workflow.
+### Phase 5: Discovery Agent
+AI-powered exploration, config generation, auto-discovery on connect.
 
-### Phase 6: Discovery Agent
-AI-powered workflow exploration and config generation.
+### Phase 6: Onboarding + Config Storage
+Zero-config onboarding, server-side config, config repo mode.
 
-### Phase 7: Polish
-Settings UI, secrets management, error handling, timeouts, cleanup cron.
+### Phase 7: Route Detection + Auto Re-discovery
+Framework parsers, merge-triggered detection, targeted re-discovery.
+
+### Phase 8: Billing + Polish
+Stripe integration, usage billing, settings UI, error handling, cleanup cron.

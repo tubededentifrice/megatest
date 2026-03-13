@@ -9,6 +9,16 @@ Megatest configuration is not a single file. It is a `.megatest/` directory cont
 
 All YAML files in the `.megatest/` directory MUST be valid YAML 1.2. Parsers MUST reject files with syntax errors rather than attempting partial interpretation.
 
+### Storage Modes
+
+This schema is the canonical format regardless of where config is stored. Megatest supports three storage modes (see spec 11 for details):
+
+- **Repo-side** (default): Config lives in `.megatest/` in the project repository. Discovery creates PRs to add or update config files.
+- **Server-side**: Config is stored in Megatest's database using the same file/directory structure. No files are committed to the repository. The worker fetches config from the Megatest API.
+- **Config repo**: Config lives in a separate Git repository. The worker clones both the project repo (for app code) and the config repo (for test config). Discovery PRs target the config repo.
+
+In all modes, the YAML format and validation rules described in this spec apply identically.
+
 ## 2. Directory Structure
 
 ```
@@ -39,6 +49,8 @@ All YAML files in the `.megatest/` directory MUST be valid YAML 1.2. Parsers MUS
 | `.megatest/includes/` | No | Only required if any workflow uses `include` steps |
 
 ## 3. config.yml Schema
+
+**Note:** Trigger rules (which GitHub events cause Megatest runs) are NOT part of this schema. They are server-side project settings configured through the Megatest UI/API. See spec 13 for the trigger rules specification.
 
 The root configuration file defines environment setup, default parameters, viewport presets, and variable bindings.
 
@@ -1406,3 +1418,11 @@ Standard YAML anchors (`&`) and aliases (`*`) are permitted since they are part 
 ### 13.10 File Encoding
 
 All `.yml` files MUST be UTF-8 encoded. A BOM (byte order mark) is permitted but not required.
+
+## 14. Schema Versioning
+
+The `version: "1"` field in `config.yml` identifies the schema version used by the configuration.
+
+- Workers MUST reject configs with an unrecognized version.
+- Future versions may introduce breaking changes; the version field enables graceful migration.
+- When a worker encounters a version it does not support, the run MUST fail with the error: `"Unsupported config schema version: {version}. Please update Megatest."`

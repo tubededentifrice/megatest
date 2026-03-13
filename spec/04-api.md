@@ -111,6 +111,18 @@ Clears the session cookie.
 
 ---
 
+### 1.5  API Token Authentication
+
+In addition to cookie-based sessions, the API supports bearer token authentication for CI/CD integrations and third-party tooling.
+
+**Header:** `Authorization: Bearer mt_<token>`
+
+API tokens are created per-organization in the settings UI or via `POST /api/v1/organizations/:id/tokens`. Each token is scoped to an organization and inherits the creating user's access. Tokens do not expire by default but can be revoked.
+
+When both a session cookie and a bearer token are present, the bearer token takes precedence.
+
+---
+
 ## 2  Webhook Endpoint
 
 ### 2.1  POST /api/webhooks/github
@@ -129,8 +141,8 @@ The request is validated using the HMAC-SHA256 signature in the
 
 | Event                        | Action(s)                          | Behaviour |
 |------------------------------|------------------------------------|-----------|
-| `push`                       | --                                 | Creates a run for the pushed branch. |
-| `pull_request`               | `opened`, `synchronize`, `reopened`| Creates a run for the PR head commit. |
+| `push`                       | --                                 | Creates a run for the pushed branch. Subject to the project's trigger rules (see spec 13). If no trigger rule matches this event, the webhook is acknowledged but no run is created. |
+| `pull_request`               | `opened`, `synchronize`, `reopened`| Creates a run for the PR head commit. Subject to the project's trigger rules (see spec 13). If no trigger rule matches this event, the webhook is acknowledged but no run is created. |
 | `pull_request`               | `closed`                           | Promotes approved baselines if `merged=true`. |
 | `installation`               | `created`                          | Records the new GitHub App installation. |
 | `installation`               | `deleted`                          | Removes the installation and deactivates linked projects. |
@@ -276,6 +288,14 @@ provided `installation_id` to fetch repository details from the GitHub API.
     "settings": {},
     "created_at": "2026-03-13T10:00:00Z"
   }
+}
+```
+
+**Side effect:** If the newly connected repository does not contain a `.megatest/` directory, a discovery job is automatically enqueued. The response includes a `discovery_id` field when this occurs:
+```json
+{
+  "project": { "..." : "..." },
+  "discovery_id": "7c0a4de1-1111-4444-8888-0123456789ab"
 }
 ```
 
@@ -936,7 +956,177 @@ the new baseline.  The GitHub commit status is updated to `success`.
 
 ---
 
-### 3.6  Discovery
+### 3.7  Organizations
+
+#### GET /api/v1/organizations
+
+Lists organizations the current user is a member of.
+
+**Response: 200**
+```json
+{
+  "organizations": [
+    {
+      "id": "org-uuid",
+      "name": "Acme Corp",
+      "slug": "acme-corp",
+      "tier": "free",
+      "role": "owner"
+    }
+  ]
+}
+```
+
+#### GET /api/v1/organizations/:id
+
+Returns full details for an organization including usage summary.
+
+**Response: 200**
+```json
+{
+  "organization": {
+    "id": "org-uuid",
+    "name": "Acme Corp",
+    "slug": "acme-corp",
+    "tier": "free",
+    "tier_limits": { "screenshots_per_month": 500, "max_projects": 3, "max_concurrent_runs": 1 },
+    "usage": { "screenshot_count": 142, "run_count": 23, "period_start": "2026-03-01T00:00:00Z" },
+    "members": [
+      { "user_id": "user-uuid", "github_login": "octocat", "role": "owner" }
+    ],
+    "created_at": "2026-01-15T10:00:00Z"
+  }
+}
+```
+
+#### POST /api/v1/organizations/:id/members
+
+Invites a user to the organization by GitHub login.
+
+**Request body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `github_login` | string | yes | GitHub username to invite |
+| `role` | string | no | `member` (default) or `admin` |
+
+**Response: 201**
+```json
+{
+  "membership": { "user_id": "user-uuid", "github_login": "newuser", "role": "member" }
+}
+```
+
+#### DELETE /api/v1/organizations/:id/members/:userId
+
+Removes a member from the organization.
+
+**Response: 204** No Content.
+
+---
+
+### 3.8  Trigger Rules
+
+#### GET /api/v1/projects/:id/triggers
+
+Returns the current trigger configuration for a project.
+
+**Response: 200**
+```json
+{
+  "triggers": [
+    { "event": "pull_request", "actions": ["opened", "synchronize", "reopened"] },
+    { "event": "push", "branches": ["main", "release/*"] }
+  ]
+}
+```
+
+#### PUT /api/v1/projects/:id/triggers
+
+Replaces the trigger configuration for a project.
+
+**Request body:**
+```json
+{
+  "triggers": [
+    { "event": "pull_request", "actions": ["opened", "synchronize", "reopened"] },
+    { "event": "push", "branches": ["main"] }
+  ]
+}
+```
+
+**Response: 200**
+```json
+{
+  "triggers": [
+    { "event": "pull_request", "actions": ["opened", "synchronize", "reopened"] },
+    { "event": "push", "branches": ["main"] }
+  ]
+}
+```
+
+Trigger rules are evaluated by the webhook handler before creating runs. If no rule matches an incoming event, the webhook is acknowledged but no run is created. See spec 13 for the full trigger rules specification.
+
+---
+
+### 3.9  Config Management
+
+#### GET /api/v1/projects/:id/config
+
+Returns the project's current config files, regardless of storage mode.
+
+**Response: 200**
+```json
+{
+  "storage_mode": "repo",
+  "files": {
+    "config.yml": "version: \"1\"\nsetup:\n  install:\n    - npm ci\n...",
+    "workflows/homepage.yml": "name: homepage\n..."
+  }
+}
+```
+
+#### PUT /api/v1/projects/:id/config
+
+Sets config files for server-side storage mode. Returns 409 if the project uses repo-side storage.
+
+**Request body:**
+```json
+{
+  "files": {
+    "config.yml": "version: \"1\"\nsetup:\n  install:\n    - npm ci\n...",
+    "workflows/homepage.yml": "name: homepage\n..."
+  }
+}
+```
+
+**Response: 200**
+```json
+{
+  "files_updated": ["config.yml", "workflows/homepage.yml"]
+}
+```
+
+#### PATCH /api/v1/projects/:id/config-mode
+
+Switches the config storage mode for a project.
+
+**Request body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `mode` | string | yes | `repo`, `server`, or `config_repo` |
+| `config_repo_url` | string | conditional | Required when mode is `config_repo` |
+
+**Response: 200**
+```json
+{
+  "config_storage_mode": "server",
+  "migration_status": "completed"
+}
+```
+
+---
+
+### 3.10  Discovery
 
 #### POST /api/v1/projects/:id/discover
 
@@ -1104,7 +1294,7 @@ pagination).  The client can compute `total_pages = ceil(total / per_page)`.
 | `GET /auth/me`             | Session cookie              | |
 | `POST /auth/logout`        | Session cookie              | |
 | `POST /api/webhooks/github`| HMAC-SHA256 signature       | `X-Hub-Signature-256` header. |
-| `GET/POST/PATCH/DELETE /api/v1/*` | Session cookie       | 401 if missing. 403 if user lacks access to the resource. |
+| `GET/POST/PATCH/DELETE /api/v1/*` | Session cookie or Bearer token | 401 if missing. 403 if user lacks access to the resource. Bearer token takes precedence when both are present. |
 | `GET /`, `GET /ui/*`       | None                        | Public static files. |
 
 ---

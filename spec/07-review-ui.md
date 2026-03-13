@@ -26,7 +26,7 @@ Requires login. Unauthenticated users are redirected to `/auth/github`.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│  MEGATEST                                          [avatar] [logout]│
+│  MEGATEST   [Acme Corp ▾]                          [avatar] [logout]│
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
 │  Projects                                      [+ Connect repo]    │
@@ -58,6 +58,8 @@ Requires login. Unauthenticated users are redirected to `/auth/github`.
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
+The org selector dropdown in the header allows switching between organizations. The selected org filters all projects and runs shown on the page.
+
 **Project cards** show:
 - Project name (clickable, links to project page)
 - Repository URL
@@ -67,6 +69,18 @@ Requires login. Unauthenticated users are redirected to `/auth/github`.
 
 **"Connect repo" button** opens a dialog listing repositories from the user's
 GitHub App installations. Selecting a repo creates a new project.
+
+**Onboarding state:** When a newly connected repo is being auto-discovered, a progress card appears at the top of the project list:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  ◐ Discovering workflows for acme/web-app...                │
+│  7 pages explored · 3 workflows generated · 45s elapsed     │
+│  [View progress]                                            │
+└─────────────────────────────────────────────────────────────┘
+```
+
+This card updates via polling and transitions to a 'Discovery complete' state with an action to review the generated config.
 
 **Recent runs table** shows the last 10 runs across all accessible projects.
 Each row links to the corresponding review page.
@@ -142,6 +156,34 @@ Each row links to the corresponding review page.
 - Shows thumbnail of the baseline image on hover or click
 - Last updated timestamp
 
+#### Discovery tab
+
+```
+  Last discovery: 2 days ago (completed, 8 workflows generated)
+
+  Re-discovery behavior: [Auto-open PR ▾]    [Run discovery now]
+
+  Uncovered Routes (3)
+  ────────────────────────────────────────────────────────────
+  ┌─────────────────────┬────────────┬───────────┬──────────┐
+  │ Route               │ Framework  │ Source    │ Action   │
+  ├─────────────────────┼────────────┼───────────┼──────────┤
+  │ /blog               │ Next.js    │ pages/    │ [Discover]│
+  │ /changelog          │ Next.js    │ pages/    │ [Discover]│
+  │ /integrations       │ Next.js    │ pages/    │ [Discover]│
+  └─────────────────────┴────────────┴───────────┴──────────┘
+  [Discover all uncovered routes]
+
+  Discovery History
+  ────────────────────────────────────────────────────────────
+  ┌────────────┬───────────┬──────────────┬──────────────────┐
+  │ Date       │ Status    │ Workflows    │ Action           │
+  ├────────────┼───────────┼──────────────┼──────────────────┤
+  │ Mar 11     │ completed │ 8 generated  │ [View report]    │
+  │ Mar 1      │ completed │ 5 generated  │ [View report]    │
+  └────────────┴───────────┴──────────────┴──────────────────┘
+```
+
 #### Settings tab
 
 ```
@@ -168,6 +210,31 @@ Each row links to the corresponding review page.
   Value: [________________]
   [Save]
 
+  Trigger Rules
+  ────────────────
+  Configure which GitHub events trigger visual test runs.
+
+  ┌──────────────────────────────────────────────────────────┐
+  │ Templates: [PRs only] [PRs + default branch] [All]      │
+  │                                                          │
+  │ ☑ Pull requests  Actions: opened, synchronize, reopened  │
+  │ ☑ Pushes         Branches: [main, release/*           ]  │
+  │ ☐ Manual only                                            │
+  │                                                          │
+  │ [Save trigger rules]                                     │
+  └──────────────────────────────────────────────────────────┘
+
+  Config Storage
+  ────────────────
+  Choose where Megatest stores workflow configuration files.
+
+  ● Store in repository (.megatest/)        ← default
+  ○ Store server-side (no repo changes)
+  ○ Store in separate config repo
+    Config repo URL: [________________________]
+
+  [Save]
+
   Danger Zone
   ────────────────
   [Delete project]
@@ -176,6 +243,27 @@ Each row links to the corresponding review page.
 - Default branch is editable
 - Secrets: set and delete only; values are never displayed (shown as bullets)
 - Delete project requires confirmation dialog
+
+---
+
+### 1.2b Organization Settings (`/org/:orgId/settings`)
+
+Accessible from the org selector dropdown. Includes:
+
+- **Members:** List of org members with role management (invite, remove, change role).
+- **Usage:** Screenshot count and run count for the current billing period, with a bar chart showing daily usage. Tier limits displayed alongside current usage. Upgrade CTA when approaching limits.
+- **Billing:** Current plan, payment method, invoice history. Links to Stripe billing portal for plan changes.
+- **API Tokens:** Create and revoke API tokens for CI/CD integrations.
+
+```
+  Usage (March 2026)
+  ────────────────────────────────────────────────────────────
+  Screenshots:  142 / 500    ████████░░░░░░░░░░  28%
+  Runs:         23  / ∞
+  Projects:     2   / 3
+
+  [Upgrade to Pro →]
+```
 
 ---
 

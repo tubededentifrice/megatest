@@ -47,6 +47,30 @@ interface RunJob {
 - **2 workers per instance** -- each worker handles one run at a time.
 - **1 concurrent run per project** -- enforced via BullMQ group concurrency on `projectId`. If a second run for the same project arrives while one is active, it waits in the queue.
 
+### Shared Worker Pool (SaaS)
+
+In the hosted SaaS deployment, multiple worker instances form a shared pool serving all tenants. Job distribution uses BullMQ group concurrency to enforce fairness:
+
+- **Per-project concurrency:** 1 concurrent run per project (unchanged from single-tenant).
+- **Per-organization concurrency:** Maximum concurrent runs per org depends on tier:
+  - Free: 1 concurrent run
+  - Pro: 3 concurrent runs
+  - Enterprise: configurable
+- **Global fairness:** BullMQ rate limiter ensures no single org can monopolize the worker pool. Each org gets at most `max_concurrent_runs` active jobs at any time.
+
+```ts
+const worker = new Worker('megatest:runs', processRun, {
+  connection: redis,
+  concurrency: 2,
+  limiter: {
+    max: 1,
+    groupKey: 'projectId',
+  },
+});
+```
+
+The `groupKey` ensures per-project serialization. Per-org limits are enforced by a pre-processing check: before starting a run, the worker queries the count of active runs for the org. If the org is at its limit, the job is re-queued with a short delay.
+
 ### Retry Policy
 
 - **1 retry on infrastructure failure** -- Docker pull timeout, network error, OOM kill, agent-browser crash that cannot be recovered. BullMQ `attempts: 2` with `backoff: { type: 'fixed', delay: 5000 }`.
@@ -121,6 +145,19 @@ const container = await docker.createContainer({
 | Disk | 10 GB |
 | Network | Dedicated bridge network per run |
 
+### Tier-Aware Resource Limits (SaaS)
+
+In the hosted SaaS, container resource limits vary by the organization's tier:
+
+| Resource | Free Tier | Pro Tier | Enterprise |
+|----------|-----------|----------|------------|
+| RAM | 1 GB | 2 GB | 4 GB |
+| CPU | 1 core | 2 cores | 4 cores |
+| Disk | 5 GB | 10 GB | 20 GB |
+| Run timeout | 5 min | 10 min | 30 min |
+
+The worker reads the org's tier from the job data and applies the corresponding limits when creating the container.
+
 ### Container Lifecycle
 
 1. **Created** -- `docker.createContainer()`
@@ -188,6 +225,18 @@ Read and validate all configuration files from the cloned repo's `.megatest/` di
 6. Resolve includes: replace `include: name` steps with the corresponding steps from `.megatest/includes/{name}.yml`. Includes may reference other includes (nested), but **circular includes are detected and cause an error**. Detection uses a visited-set during recursive resolution.
 
 If no workflows are found, the run fails with error: "No workflow files found in .megatest/workflows/".
+
+### Config Source Resolution
+
+The worker resolves config from one of three sources based on `project.config_storage_mode`:
+
+1. **`repo` (default):** Read config from `.megatest/` in the cloned repository. This is the behavior described above.
+
+2. **`server`:** Fetch config from the Megatest API via `GET /api/v1/projects/:id/config` (internal endpoint). The response contains all config files as a key-value map. Parse them identically to repo-side files.
+
+3. **`config_repo`:** Clone a second repository (`project.config_repo_url`) alongside the main repo. Read config from `.megatest/` in the config repo. The main repo is still cloned for app code.
+
+The `config_storage_mode` is included in the job data so the worker knows which source to use without an extra API call.
 
 ### 3.3 Docker Setup
 
@@ -414,6 +463,24 @@ await db.runs.update(runId, {
 });
 ```
 
+### 3.7b Meter Usage
+
+After recording checkpoint results, the worker increments usage counters for the organization:
+
+- **Screenshot count:** Add the number of screenshots captured in this run.
+- **Run count:** Increment by 1.
+
+Usage is recorded in the `usage_records` table for the current billing period. If the org has exceeded its tier's screenshot limit, a warning is included in the PR comment (see 3.8 Notify).
+
+```ts
+await db.usageRecords.increment(orgId, currentPeriod, {
+  screenshot_count: checkpoints.length,
+  run_count: 1,
+});
+```
+
+**Quota enforcement:** Before starting a run (at the beginning of `processRun`), the worker checks the org's current usage against its tier limits. If the org has exceeded its hard limit, the run is immediately failed with error: 'Organization screenshot quota exceeded. Upgrade your plan or wait for the next billing period.'
+
 ### 3.8 Notify
 
 Report the run outcome to GitHub and to users via the review UI.
@@ -442,6 +509,12 @@ Comment contents:
 - Summary line: result emoji/text, number of checkpoints by status.
 - Table of failed/new checkpoints (truncated if more than 20).
 - Link to full review page: `{BASE_URL}/review/{runId}`.
+
+### 3.8b Post-Merge Route Detection
+
+When a run was triggered by a merged pull request (`trigger = 'pull_request'` and the PR has been merged), the worker enqueues a route detection job after baseline promotion completes. This job performs diff-based static analysis to identify new routes not covered by existing workflows (see spec 12).
+
+The route detection job is a lightweight, separate queue (`megatest:route-detection`) that does not consume a run slot.
 
 ### 3.9 Cleanup
 

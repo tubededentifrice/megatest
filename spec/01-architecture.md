@@ -20,6 +20,8 @@ A secondary flow -- the Discovery Agent -- uses an AI model to explore a running
 ## 2. Component Diagram
 
 ```
+Self-hosted deployment:
+
                         ┌──────────┐
                         │  GitHub  │
                         └────┬─────┘
@@ -56,9 +58,45 @@ A secondary flow -- the Discovery Agent -- uses an AI model to explore a running
                              │
                              ▼
                     ┌─────────────────┐
-                    │    Database     │
-                    │ (SQLite / PG)   │
+                    │   PostgreSQL    │
                     └─────────────────┘
+
+
+SaaS deployment:
+
+                        ┌──────────┐
+                        │  GitHub  │
+                        └────┬─────┘
+                             │ webhook / OAuth / status
+                             ▼
+                    ┌─────────────────┐
+                    │  Load Balancer  │
+                    └────────┬────────┘
+                             │
+              ┌──────────────┼──────────────┐
+              ▼              ▼              ▼
+     ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
+     │  API Server │ │  API Server │ │  API Server │
+     │  (Fastify)  │ │  (Fastify)  │ │  (Fastify)  │
+     └──────┬──────┘ └──────┬──────┘ └──────┬──────┘
+            │               │               │
+            └───────────────┼───────────────┘
+                            ▼
+                   ┌─────────────────┐
+                   │   Job Queue     │
+                   │  (BullMQ/Redis) │
+                   └────────┬────────┘
+                            │
+              ┌─────────────┼─────────────┐
+              ▼             ▼             ▼
+     ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+     │  Worker Host │ │  Worker Host │ │  Worker Host │
+     └──────────────┘ └──────────────┘ └──────────────┘
+                            │
+                            ▼
+                   ┌─────────────────┐
+                   │   PostgreSQL    │
+                   └─────────────────┘
 
 
 Discovery Agent Flow:
@@ -93,7 +131,7 @@ Discovery Agent Flow:
 | Browser Automation | `agent-browser` CLI (Rust, v0.17.1) | Headless Chromium control via semantic locators (`find testid`, `find role`, `find text`, `find label`) and element refs (`@e1`) |
 | Image Diffing | `pixelmatch` (npm) | Pixel-level screenshot comparison, produces diff images |
 | User App Isolation | Docker (one container per run) | Sandboxed execution of user code |
-| Database | SQLite (single-node) / PostgreSQL (scaled) | Stores runs, projects, baselines, users, orgs |
+| Database | PostgreSQL | Stores runs, projects, baselines, users, orgs, usage records |
 | Storage | Local filesystem or S3-compatible | Stores screenshot PNGs, baseline images, diff images |
 | Auth | GitHub OAuth | Multi-tenant login, repo-scoped access |
 | Config | `.megatest/` directory in repo | Test definitions, viewport settings, thresholds -- AI-generated |
@@ -148,9 +186,9 @@ BullMQ provides:
 - Dashboard-compatible (Bull Board) for operational visibility.
 - Redis is already required, adding no new infrastructure.
 
-### 4.6 SQLite / PostgreSQL for database
+### 4.6 PostgreSQL for database
 
-SQLite for single-node self-hosted deployments (zero config, no extra process). PostgreSQL for any deployment needing concurrent writers or horizontal scaling. The application uses a thin data-access layer that abstracts the dialect.
+PostgreSQL is the sole database backend. This simplifies the data layer by eliminating dialect abstraction and enables use of PostgreSQL-native features (UUID, TIMESTAMPTZ, JSONB, advisory locks). Self-hosted deployments include a PostgreSQL container in the Docker Compose stack.
 
 ### 4.7 `.megatest/` directory (not a single YAML file)
 
@@ -165,6 +203,15 @@ Users do not write these files. The Discovery Agent generates them.
 ### 4.8 Embedded SPA for Web UI
 
 The Web UI is served directly by the Fastify API server (no separate frontend deployment). Vanilla JS or Preact keeps the bundle small and avoids a build toolchain dependency for the UI.
+
+### 4.9 Tenant Isolation in Shared Worker Pool
+
+All tenants share a pool of worker machines. Isolation is enforced at multiple layers:
+
+- **Job distribution:** Jobs are distributed via BullMQ with per-org group concurrency. Each project is limited to 1 concurrent run; each org is limited to a maximum of N concurrent runs based on its billing tier.
+- **Execution isolation:** Every run executes inside its own Docker container, which is destroyed on completion. Containers share no state with other runs.
+- **Storage partitioning:** Screenshot, baseline, and diff storage paths are partitioned by org and project (e.g., `/{org_id}/{project_id}/...`), preventing cross-tenant access at the filesystem/object-store level.
+- **Resource limits by tier:** Free-tier containers run with reduced resource limits (1 GB RAM, 1 CPU). Paid-tier containers receive higher limits (2 GB RAM, 2 CPU).
 
 ---
 
@@ -186,7 +233,7 @@ services:
     ports:
       - "${API_PORT:-3000}:3000"
     environment:
-      - DATABASE_URL=${DATABASE_URL:-sqlite:/data/megatest.db}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://megatest:megatest@postgres:5432/megatest}
       - REDIS_URL=redis://redis:6379
       - GITHUB_APP_ID=${GITHUB_APP_ID}
       - GITHUB_PRIVATE_KEY=${GITHUB_PRIVATE_KEY}
@@ -206,12 +253,13 @@ services:
       - data:/data
     depends_on:
       - redis
+      - postgres
 
   worker:
     build: .
     command: node worker/index.mjs
     environment:
-      - DATABASE_URL=${DATABASE_URL:-sqlite:/data/megatest.db}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://megatest:megatest@postgres:5432/megatest}
       - REDIS_URL=redis://redis:6379
       - STORAGE_BACKEND=${STORAGE_BACKEND:-local}
       - STORAGE_PATH=/data/storage
@@ -227,15 +275,26 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       - redis
+      - postgres
 
   redis:
     image: redis:7-alpine
     volumes:
       - redis-data:/data
 
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=megatest
+      - POSTGRES_PASSWORD=megatest
+      - POSTGRES_DB=megatest
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+
 volumes:
   data:
   redis-data:
+  pg-data:
 ```
 
 ### 5.2 Environment Variables
@@ -250,7 +309,7 @@ volumes:
 | `SESSION_SECRET` | Yes | -- | Secret for signing session cookies |
 | `BASE_URL` | No | `http://localhost:3000` | Public URL of the Megatest instance |
 | `API_PORT` | No | `3000` | Port the API server listens on |
-| `DATABASE_URL` | No | `sqlite:/data/megatest.db` | Database connection string. Use `postgresql://...` for PG. |
+| `DATABASE_URL` | No | `postgresql://megatest:megatest@postgres:5432/megatest` | PostgreSQL connection string. Self-hosted deployments use the included PostgreSQL container by default. |
 | `REDIS_URL` | No | `redis://redis:6379` | Redis connection URL |
 | `STORAGE_BACKEND` | No | `local` | `local` or `s3` |
 | `STORAGE_PATH` | No | `/data/storage` | Local filesystem path for screenshots (when backend=local) |

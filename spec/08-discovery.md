@@ -19,6 +19,8 @@ Discovery can be triggered:
 - **Initial setup** -- when a project is first connected to Megatest
 - **Manual re-discovery** -- via the API or UI ("Re-discover workflows")
 - **Scheduled re-discovery** -- periodic runs to detect new pages or flows that have been added since the last discovery
+- **Auto-triggered on repo connect** -- when a project is first connected to Megatest and no `.megatest/` config exists, discovery runs automatically (see spec 10)
+- **Merge-triggered route detection** -- after a PR merge, diff-based static analysis detects new routes not covered by existing workflows, which may trigger targeted re-discovery (see spec 12)
 
 Discovery is a best-effort, additive process. It produces a PR for human review rather than silently committing config. The user always has final say over what gets merged.
 
@@ -61,6 +63,21 @@ The setup phase is identical to a regular Megatest run:
 4. Wait for the app to become ready (poll the serve.ready URL or port)
 
 If this is first discovery and no config.yml exists, the agent enters **setup detection mode** (Section 4) to figure out how to install dependencies and start the app.
+
+### 3.1b Auto-Discovery on Repo Connection
+
+When a project is first connected via `POST /api/v1/projects` and the repository does not contain a `.megatest/` directory, a discovery job is automatically enqueued. This is the zero-config onboarding experience.
+
+The auto-discovery flow:
+1. Project is created via the API.
+2. Server performs a lightweight check: use the GitHub Contents API to probe for `.megatest/config.yml` in the repo's default branch.
+3. If the file does not exist, enqueue a discovery job and return the `discovery_id` in the project creation response.
+4. The discovery job runs the full setup detection (section 4) and exploration (section 3.2) flow.
+5. Discovery progress is visible in the UI via the project dashboard's onboarding card.
+6. On completion, behavior depends on the project's `config_storage_mode`:
+   - **repo (default):** The user is prompted to review results and create a PR (or auto-PR if configured).
+   - **server:** Config files are stored directly in the database. No PR needed.
+   - **config_repo:** A PR is created on the config repository.
 
 ### 3.2 Exploration Phase
 
@@ -230,6 +247,16 @@ steps:
   - wait: 500
   - screenshot: dashboard-main
 ```
+
+### Config Storage Mode Awareness
+
+Config generation produces the same YAML files regardless of storage mode. The difference is in how the output is applied:
+
+- **Repo mode:** Files are committed to a branch and a PR is created via the GitHub API (section 5.3).
+- **Server mode:** Files are written to the `project_configs` table via `PUT /api/v1/projects/:id/config`.
+- **Config repo mode:** Files are committed to the config repository and a PR is created there.
+
+The `POST /api/v1/discoveries/:id/apply` endpoint handles all three modes transparently. The caller does not need to know the storage mode.
 
 ### 3.6 Output
 
@@ -496,6 +523,17 @@ If `create_pr: false`:
   }
 }
 ```
+
+**Server-side mode behavior:** When the project uses `config_storage_mode = 'server'`, the apply endpoint stores config files directly in the database. The `create_pr` parameter is ignored (no PR is possible). The response omits `pr_url` and `branch`:
+
+```json
+{
+  "files_applied": [".megatest/config.yml", ".megatest/workflows/homepage.yml"],
+  "storage_mode": "server"
+}
+```
+
+**Config repo mode behavior:** When the project uses `config_storage_mode = 'config_repo'`, the PR is created on the config repository (not the main project repo). The response includes the config repo's PR URL.
 
 ### 5.4 List Discoveries
 
@@ -900,3 +938,21 @@ Example PR body:
 - Review `workflows/pricing.yml` and update or remove it
 - The /integrations page has heavy dynamic content -- consider adding mask regions
 ```
+
+### 8.1 Re-Discovery UX Modes
+
+Re-discovery results are handled according to the project's `re_discovery_mode` setting (stored in project server-side settings):
+
+**Mode 1: Auto-PR** (`re_discovery_mode: 'auto_pr'`)
+- When new workflows are generated (from re-discovery or route detection), Megatest automatically creates a PR on the target repo (or config repo).
+- The PR includes only new files. Existing workflows are never modified.
+- PR title: 'Add Megatest workflows for {N} new pages'
+- PR body includes the discovery report with confidence scores and recommendations.
+
+**Mode 2: Suggest in UI** (`re_discovery_mode: 'suggest'`, default)
+- New uncovered routes are stored as suggestions in the `detected_routes` table.
+- The project's Discovery tab shows suggestions with 'Discover' buttons.
+- The user can discover individual routes or all uncovered routes at once.
+- After discovery completes, the user can review generated workflows and choose to create a PR or apply server-side.
+
+The mode is configurable per-project in the project settings tab.

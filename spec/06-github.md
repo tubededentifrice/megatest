@@ -145,6 +145,8 @@ Browser                     Megatest Server                GitHub
 
 7. **Create or update user record**: Match on `github_id`. Store `github_login`, `email`, `name`, `avatar_url`. The user access token is stored encrypted for later API calls on behalf of the user.
 
+7b. **Organization association:** If the user is new (not an existing record), check if they should be associated with an organization. If the user's GitHub account or any of their GitHub App installations match an existing org, add them as a member. If no matching org exists, create a new organization named after the user's GitHub login. The user becomes the `owner` of the new org.
+
 8. **Set session**: Issue an HTTP-only, SameSite=Lax session cookie. Set
    `Secure` when `BASE_URL` is HTTPS; allow non-secure cookies only for local
    `http://localhost` / loopback development. Redirect to the page the user was
@@ -203,7 +205,7 @@ Triggered when commits are pushed to a branch.
 1. Parse branch name from `ref` (strip `refs/heads/`).
 2. Find project by `github_repo_id = repository.id`.
 3. If no matching project, ignore (respond 200).
-4. If branch filtering is configured on the project, check if this branch is tracked. Skip if not.
+4. Evaluate the project's trigger rules (see spec 13). Check if a trigger rule matches this `push` event for this branch. If no rule matches, ignore (respond 200, no run created).
 5. Create a `run` record:
    - `project_id`: matched project
    - `trigger`: `"push"`
@@ -234,7 +236,11 @@ Triggered on PR activity. Megatest acts on these actions: `opened`,
 1. If `action` is not one of `opened`, `synchronize`, `reopened`, `closed`, ignore (respond 200).
 2. Find project by `github_repo_id = repository.id`.
 3. If no matching project, ignore (respond 200).
-4. If `action = closed` and `pull_request.merged = true`, trigger baseline promotion for the PR's most recent completed Megatest run and respond 200.
+3b. Evaluate the project's trigger rules. Check if a trigger rule matches this `pull_request` event with this action. If no rule matches, ignore (respond 200, no run created). Note: `closed` with `merged=true` always proceeds regardless of trigger rules (baseline promotion must not be blocked by trigger config).
+4. If `action = closed` and `pull_request.merged = true`:
+   a. Trigger baseline promotion for the PR's most recent completed Megatest run.
+   b. Enqueue a route detection job for the project to check for new uncovered routes in the merged changes (see spec 12). The job receives the merge commit SHA and the diff range (`base_sha...merge_sha`) for targeted file analysis.
+   c. Respond 200.
 5. If `action = closed` and `merged = false`, ignore (respond 200).
 6. Otherwise create a `run` record:
    - `project_id`: matched project
@@ -573,6 +579,10 @@ commit-message or merge-strategy heuristics.
 - **No run found for PR**: Skip promotion. The PR may not have had Megatest configured.
 - **Multiple runs for PR**: Use the most recent `completed` run for the PR head SHA at merge time when available, otherwise the most recent completed PR run.
 - **Direct push to default branch**: Treat as a normal push. No promotion logic runs.
+
+### Config Repo Awareness
+
+When a project uses `config_storage_mode = 'config_repo'`, discovery PRs and auto-generated workflow updates target the config repository, not the main project repository. The main repo's `pull_request.closed` webhook still triggers baseline promotion and route detection as normal, but any resulting re-discovery PRs are created on the config repo.
 
 ---
 

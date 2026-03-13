@@ -1,8 +1,8 @@
 # 03 - Data Model
 
-This document defines the database schema for Megatest. All SQL is written to be compatible with both SQLite and PostgreSQL: UUIDs are stored as TEXT, timestamps as DATETIME, and structured data as JSON.
+This document defines the database schema for Megatest. All SQL is PostgreSQL. Native types are used throughout: UUID for identifiers, TIMESTAMPTZ for timestamps, JSONB for structured data, BOOLEAN for flags.
 
-Application code is responsible for generating UUIDs (v4) before insertion.
+Application code is responsible for generating UUIDs (v4) before insertion. Alternatively, use `gen_random_uuid()` as a column default.
 
 ---
 
@@ -14,15 +14,48 @@ GitHub OAuth users.
 
 ```sql
 CREATE TABLE users (
-    id                  TEXT PRIMARY KEY,          -- uuid v4
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     github_id           INTEGER NOT NULL UNIQUE,
     github_login        TEXT NOT NULL,             -- username (e.g. "octocat")
     github_name         TEXT,                      -- display name
     github_email        TEXT,                      -- primary verified email, if available
     github_avatar_url   TEXT,
     github_access_token TEXT NOT NULL,             -- encrypted at rest
-    created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at          DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at          TIMESTAMPTZ DEFAULT now(),
+    updated_at          TIMESTAMPTZ DEFAULT now()
+);
+```
+
+### organizations
+
+Organizations that own projects and are billed as a unit.
+
+```sql
+CREATE TABLE organizations (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name                TEXT NOT NULL,              -- display name (e.g. "Acme Corp")
+    slug                TEXT NOT NULL UNIQUE,       -- URL-safe identifier (e.g. "acme-corp")
+    billing_email       TEXT,
+    stripe_customer_id  TEXT,                       -- Stripe customer ID for billing
+    tier                TEXT NOT NULL DEFAULT 'free', -- free|pro|enterprise
+    tier_limits         JSONB,                      -- override limits for this org (null = use tier defaults)
+    created_at          TIMESTAMPTZ DEFAULT now(),
+    updated_at          TIMESTAMPTZ DEFAULT now()
+);
+```
+
+### memberships
+
+Join table linking users to organizations with a role.
+
+```sql
+CREATE TABLE memberships (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID NOT NULL REFERENCES users(id),
+    organization_id UUID NOT NULL REFERENCES organizations(id),
+    role            TEXT NOT NULL DEFAULT 'member', -- owner|admin|member
+    created_at      TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(user_id, organization_id)
 );
 ```
 
@@ -32,15 +65,15 @@ GitHub App installations on user or organization accounts. Created/updated via G
 
 ```sql
 CREATE TABLE github_installations (
-    id                TEXT PRIMARY KEY,            -- uuid v4
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     installation_id   INTEGER NOT NULL UNIQUE,    -- GitHub's numeric installation ID
     account_type      TEXT NOT NULL,              -- "user" | "organization"
     account_login     TEXT NOT NULL,              -- org or user login
     account_id        INTEGER NOT NULL,           -- GitHub's numeric account ID
-    permissions       JSON,                       -- permissions granted to the installation
+    permissions       JSONB,                      -- permissions granted to the installation
     status            TEXT NOT NULL DEFAULT 'active', -- active|deleted
-    created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at        DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at        TIMESTAMPTZ DEFAULT now(),
+    updated_at        TIMESTAMPTZ DEFAULT now()
 );
 ```
 
@@ -52,14 +85,14 @@ drives the repo picker in the UI and is maintained from
 
 ```sql
 CREATE TABLE installation_repositories (
-    id                TEXT PRIMARY KEY,            -- uuid v4
-    installation_id   TEXT NOT NULL REFERENCES github_installations(id),
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    installation_id   UUID NOT NULL REFERENCES github_installations(id),
     repo_id           INTEGER NOT NULL,
     repo_name         TEXT NOT NULL,
     repo_full_name    TEXT NOT NULL,
     is_active         BOOLEAN DEFAULT true,
-    created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at        TIMESTAMPTZ DEFAULT now(),
+    updated_at        TIMESTAMPTZ DEFAULT now(),
     UNIQUE(installation_id, repo_id)
 );
 ```
@@ -70,18 +103,37 @@ Connected repositories. A project is created when a user selects a repo from an 
 
 ```sql
 CREATE TABLE projects (
-    id                TEXT PRIMARY KEY,            -- uuid v4
-    installation_id   TEXT NOT NULL REFERENCES github_installations(id),
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id   UUID NOT NULL REFERENCES organizations(id),
+    installation_id   UUID NOT NULL REFERENCES github_installations(id),
     name              TEXT NOT NULL,              -- "org/repo"
     repo_url          TEXT NOT NULL,              -- https clone URL
     repo_id           INTEGER NOT NULL,           -- GitHub's numeric repo ID
     default_branch    TEXT DEFAULT 'main',
-    settings          JSON,                       -- operational settings only (e.g. branch filters, run timeout)
-    secrets           JSON,                       -- encrypted project secrets for ${env:VAR}
+    config_storage_mode TEXT NOT NULL DEFAULT 'repo',  -- repo|server|config_repo
+    config_repo_url   TEXT,                       -- URL of separate config repo (when config_storage_mode = 'config_repo')
+    settings          JSONB,                      -- operational settings only (e.g. branch filters, run timeout)
+    secrets           JSONB,                      -- encrypted project secrets for ${env:VAR}
+    trigger_rules     JSONB,                      -- per-project trigger configuration (see spec 13)
     is_active         BOOLEAN DEFAULT true,
-    created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at        TIMESTAMPTZ DEFAULT now(),
+    updated_at        TIMESTAMPTZ DEFAULT now(),
     UNIQUE(repo_id)
+);
+```
+
+### project_configs
+
+Server-side configuration storage for projects that use `config_storage_mode = 'server'`.
+
+```sql
+CREATE TABLE project_configs (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id      UUID NOT NULL REFERENCES projects(id),
+    file_path       TEXT NOT NULL,              -- relative path, e.g. "config.yml" or "workflows/login.yml"
+    content         TEXT NOT NULL,              -- raw YAML content
+    updated_at      TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(project_id, file_path)
 );
 ```
 
@@ -91,8 +143,8 @@ One execution triggered by a commit push or pull request event. A run walks thro
 
 ```sql
 CREATE TABLE runs (
-    id                TEXT PRIMARY KEY,            -- uuid v4
-    project_id        TEXT NOT NULL REFERENCES projects(id),
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id        UUID NOT NULL REFERENCES projects(id),
     trigger           TEXT NOT NULL,              -- "push" | "pull_request" | "manual"
     branch            TEXT NOT NULL,              -- head branch
     commit_sha        TEXT NOT NULL,
@@ -102,10 +154,10 @@ CREATE TABLE runs (
     status            TEXT DEFAULT 'queued',      -- queued|cloning|setting_up|running|comparing|completed|failed|cancelled
     result            TEXT,                       -- pass|fail|error (set when status = completed)
     error_message     TEXT,
-    config_snapshot   JSON,                       -- parsed .megatest/ config at time of run
-    started_at        DATETIME,
-    completed_at      DATETIME,
-    created_at        DATETIME DEFAULT CURRENT_TIMESTAMP
+    config_snapshot   JSONB,                      -- parsed .megatest/ config at time of run
+    started_at        TIMESTAMPTZ,
+    completed_at      TIMESTAMPTZ,
+    created_at        TIMESTAMPTZ DEFAULT now()
 );
 ```
 
@@ -123,8 +175,8 @@ Individual screenshots captured within a run. Each checkpoint belongs to a workf
 
 ```sql
 CREATE TABLE checkpoints (
-    id                  TEXT PRIMARY KEY,          -- uuid v4
-    run_id              TEXT NOT NULL REFERENCES runs(id),
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    run_id              UUID NOT NULL REFERENCES runs(id),
     workflow            TEXT NOT NULL,             -- workflow name from config
     name                TEXT NOT NULL,             -- screenshot/checkpoint name
     viewport            TEXT NOT NULL,             -- viewport name or "WxH" (e.g. "desktop" or "1280x720")
@@ -134,13 +186,13 @@ CREATE TABLE checkpoints (
     threshold           REAL NOT NULL,            -- configured threshold at time of comparison
     pixel_count         INTEGER,                  -- total pixels in image
     diff_pixels         INTEGER,                  -- number of differing pixels
-    dimensions          JSON,                     -- { "width": N, "height": N }
-    baseline_dimensions JSON,                     -- { "width": N, "height": N } (null if new)
+    dimensions          JSONB,                    -- { "width": N, "height": N }
+    baseline_dimensions JSONB,                    -- { "width": N, "height": N } (null if new)
     error_message       TEXT,
     actual_path         TEXT,                     -- storage path to captured screenshot
     baseline_path       TEXT,                     -- storage path to baseline used for comparison
     diff_path           TEXT,                     -- storage path to diff image
-    created_at          DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at          TIMESTAMPTZ DEFAULT now()
 );
 ```
 
@@ -150,16 +202,16 @@ The approved source-of-truth image for a given project, branch, workflow, checkp
 
 ```sql
 CREATE TABLE baselines (
-    id              TEXT PRIMARY KEY,              -- uuid v4
-    project_id      TEXT NOT NULL REFERENCES projects(id),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id      UUID NOT NULL REFERENCES projects(id),
     branch          TEXT NOT NULL,
     workflow        TEXT NOT NULL,
     checkpoint      TEXT NOT NULL,                -- checkpoint name
     viewport        TEXT NOT NULL,
     storage_path    TEXT NOT NULL,                -- path in storage backend
-    approved_from   TEXT REFERENCES runs(id),     -- the run that produced the approved image
-    approved_by     TEXT REFERENCES users(id),    -- the user who approved it
-    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    approved_from   UUID REFERENCES runs(id),     -- the run that produced the approved image
+    approved_by     UUID REFERENCES users(id),    -- the user who approved it
+    created_at      TIMESTAMPTZ DEFAULT now(),
     UNIQUE(project_id, branch, workflow, checkpoint, viewport)
 );
 ```
@@ -170,13 +222,13 @@ Audit trail of approve and reject actions taken on checkpoints. Every user actio
 
 ```sql
 CREATE TABLE approvals (
-    id              TEXT PRIMARY KEY,              -- uuid v4
-    checkpoint_id   TEXT NOT NULL REFERENCES checkpoints(id),
-    run_id          TEXT NOT NULL REFERENCES runs(id),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    checkpoint_id   UUID NOT NULL REFERENCES checkpoints(id),
+    run_id          UUID NOT NULL REFERENCES runs(id),
     action          TEXT NOT NULL,                -- "approve" | "reject"
-    user_id         TEXT REFERENCES users(id),   -- nullable for system-generated actions
+    user_id         UUID REFERENCES users(id),   -- nullable for system-generated actions
     comment         TEXT,
-    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at      TIMESTAMPTZ DEFAULT now()
 );
 ```
 
@@ -196,17 +248,17 @@ Asynchronous discovery jobs and their generated outputs.
 
 ```sql
 CREATE TABLE discoveries (
-    id                TEXT PRIMARY KEY,            -- uuid v4
-    project_id        TEXT NOT NULL REFERENCES projects(id),
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id        UUID NOT NULL REFERENCES projects(id),
     branch            TEXT NOT NULL,
     status            TEXT NOT NULL,              -- queued|running|completed|failed
     error_phase       TEXT,
     error_message     TEXT,
-    report            JSON,                       -- discovery report metadata
-    workflows         JSON,                       -- generated workflow summaries
-    config_files      JSON,                       -- generated file contents keyed by relative .megatest path
-    created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
-    completed_at      DATETIME
+    report            JSONB,                      -- discovery report metadata
+    workflows         JSONB,                      -- generated workflow summaries
+    config_files      JSONB,                      -- generated file contents keyed by relative .megatest path
+    created_at        TIMESTAMPTZ DEFAULT now(),
+    completed_at      TIMESTAMPTZ
 );
 ```
 
@@ -217,14 +269,53 @@ before side effects are committed.
 
 ```sql
 CREATE TABLE webhook_deliveries (
-    id                TEXT PRIMARY KEY,            -- uuid v4
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     provider          TEXT NOT NULL,              -- "github"
     delivery_id       TEXT NOT NULL,              -- X-GitHub-Delivery
     event_name        TEXT NOT NULL,
-    processed_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    processed_at      TIMESTAMPTZ DEFAULT now(),
     outcome           TEXT NOT NULL,              -- processed|ignored|failed
     error_message     TEXT,
     UNIQUE(provider, delivery_id)
+);
+```
+
+### usage_records
+
+SaaS metering records for billing. One row per organization per billing period.
+
+```sql
+CREATE TABLE usage_records (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL REFERENCES organizations(id),
+    period_start    TIMESTAMPTZ NOT NULL,       -- beginning of billing period
+    period_end      TIMESTAMPTZ NOT NULL,       -- end of billing period
+    screenshot_count INTEGER DEFAULT 0,
+    run_count        INTEGER DEFAULT 0,
+    storage_bytes    BIGINT DEFAULT 0,
+    created_at       TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(organization_id, period_start)
+);
+```
+
+### detected_routes
+
+Routes discovered by static analysis of the project source code. Used to suggest new workflows for uncovered pages.
+
+```sql
+CREATE TABLE detected_routes (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id          UUID NOT NULL REFERENCES projects(id),
+    route_path          TEXT NOT NULL,              -- e.g. "/dashboard", "/settings/profile"
+    framework           TEXT,                       -- e.g. "nextjs", "react-router", "sveltekit"
+    source_file         TEXT,                       -- e.g. "pages/dashboard.tsx"
+    first_seen_sha      TEXT,                       -- commit SHA where this route was first detected
+    last_seen_sha       TEXT,                       -- most recent commit SHA where this route was present
+    covered_by_workflow TEXT,                       -- workflow name that covers this route, null if uncovered
+    suggestion_status   TEXT DEFAULT 'pending',     -- pending|applied|dismissed
+    created_at          TIMESTAMPTZ DEFAULT now(),
+    updated_at          TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(project_id, route_path)
 );
 ```
 
@@ -255,6 +346,22 @@ CREATE INDEX idx_installation_repositories_installation_id ON installation_repos
 
 -- Discovery history
 CREATE INDEX idx_discoveries_project_created_at ON discoveries(project_id, created_at);
+
+-- Organization membership lookups
+CREATE INDEX idx_memberships_user_id ON memberships(user_id);
+CREATE INDEX idx_memberships_organization_id ON memberships(organization_id);
+
+-- Projects by organization
+CREATE INDEX idx_projects_organization_id ON projects(organization_id);
+
+-- Server-side config lookup
+CREATE INDEX idx_project_configs_project_id ON project_configs(project_id);
+
+-- Usage records by org and period
+CREATE INDEX idx_usage_records_org_period ON usage_records(organization_id, period_start);
+
+-- Uncovered route detection
+CREATE INDEX idx_detected_routes_project_uncovered ON detected_routes(project_id, suggestion_status) WHERE covered_by_workflow IS NULL;
 ```
 
 ---
