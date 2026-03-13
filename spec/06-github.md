@@ -27,6 +27,7 @@ Megatest integrates with GitHub via a **GitHub App**. This is the only VCS provi
 
 - `push` -- trigger runs on branch pushes
 - `pull_request` -- trigger runs on PR open/update and merged-close promotion
+- `deployment_status` -- trigger runs when a deployment succeeds (for external serve mode)
 - `installation` -- track App installs and uninstalls
 - `installation_repositories` -- track repo access changes
 
@@ -320,6 +321,58 @@ Triggered when repos are removed from an existing installation.
 2. Deactivate any projects linked to those repos.
 3. Cancel any queued runs for those projects.
 4. Respond **200 OK**.
+
+### 4.7 deployment_status
+
+Triggered when a deployment status changes (e.g., a Vercel preview deployment finishes building). Megatest acts only on `state: "success"` events.
+
+**Extract from payload:**
+- `deployment_status.state` -- filter to `"success"` only
+- `deployment_status.target_url` -- the deployment URL (may be null)
+- `deployment_status.environment_url` -- the deployment URL (preferred over `target_url` when present)
+- `deployment.sha` -- the commit SHA that was deployed
+- `deployment.ref` -- the branch/ref that was deployed
+- `deployment.environment` -- environment name (e.g., `"preview"`, `"production"`, `"staging"`)
+- `repository.id` -- match to project
+- `repository.full_name` -- `{owner}/{repo}`
+- `installation.id` -- for API access
+- `sender.login` -- who triggered the deployment
+
+**Processing:**
+
+1. If `deployment_status.state` is not `"success"`, ignore (respond 200).
+2. Find project by `github_repo_id = repository.id`.
+3. If no matching project, ignore (respond 200).
+4. Evaluate the project's trigger rules (see spec 13). Check if a trigger rule matches this `deployment_status` event for this environment. If no rule matches, ignore (respond 200, no run created).
+5. Resolve the deploy URL:
+   - Prefer `deployment_status.environment_url` if present.
+   - Fall back to `deployment_status.target_url`.
+   - If neither is present, fall back to the project's `deploy_url_template` with metadata interpolation.
+   - If no URL can be resolved, log a warning and ignore (respond 200, no run created).
+6. Parse branch name from `deployment.ref` (strip `refs/heads/` if present).
+7. Check for an existing run for this commit SHA on this project:
+   - If a `queued` or in-progress run exists for the same SHA, ignore to avoid duplicate runs (respond 200).
+8. Look up the PR associated with this commit (if any) via the GitHub API:
+   ```
+   GET /repos/{owner}/{repo}/commits/{sha}/pulls
+   ```
+   If a PR is found, populate `pr_number` and `base_branch` on the run.
+9. Create a `run` record:
+   - `project_id`: matched project
+   - `trigger`: `"deployment_status"`
+   - `commit_sha`: `deployment.sha`
+   - `branch`: parsed branch name
+   - `base_branch`: from PR lookup (if applicable)
+   - `pr_number`: from PR lookup (if applicable)
+   - `deploy_url`: resolved deploy URL
+   - `status`: `"queued"`
+10. Enqueue the run job with the deploy URL in the job data.
+11. Respond **202 Accepted** with `{ "run_id": "{id}" }`.
+
+**Notes:**
+- Multiple deployment statuses may fire for the same commit (e.g., different environments). The trigger rule's `environments` filter controls which deployments create runs.
+- The `deployment_status` event does not carry PR information directly. The worker performs a PR lookup via the GitHub API to associate the run with a PR for baseline resolution and PR comment posting.
+- GitHub App permissions do not need to change -- `deployment_status` events are delivered based on the `Deployments` read permission, which is implicit when the App is installed on a repository that uses deployments.
 
 ---
 

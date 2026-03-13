@@ -44,6 +44,10 @@ Trigger rules are stored as a JSONB value in the `projects.trigger_rules` column
     {
       "event": "push",
       "branches": ["main", "release/*"]
+    },
+    {
+      "event": "deployment_status",
+      "environments": ["preview", "staging"]
     }
   ]
 }
@@ -55,13 +59,14 @@ Trigger rules are stored as a JSONB value in the `projects.trigger_rules` column
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `event` | string | yes | GitHub event type: `push` or `pull_request` |
+| `event` | string | yes | GitHub event type: `push`, `pull_request`, or `deployment_status` |
 | `actions` | string[] | no | For `pull_request` only: which PR actions to match. Default: `["opened", "synchronize", "reopened"]` |
 | `branches` | string[] | no | For `push` only: which branches to match. Supports glob patterns. Default: `["*"]` (all branches) |
 | `base_branches` | string[] | no | For `pull_request` only: match PRs targeting these base branches. Supports glob patterns. Default: `["*"]` |
 | `head_branches` | string[] | no | For `pull_request` only: match PRs from these head branches. Supports glob patterns. Default: `["*"]` |
+| `environments` | string[] | no | For `deployment_status` only: which deployment environments to match (e.g., `["preview"]`, `["staging", "production"]`). Matched against `deployment.environment` in the webhook payload. Supports glob patterns. Default: `["*"]` (all environments) |
 
-Fields that do not apply to the given event type are ignored. For example, `branches` on a `pull_request` rule is ignored, and `actions` on a `push` rule is ignored.
+Fields that do not apply to the given event type are ignored. For example, `branches` on a `pull_request` rule is ignored, `actions` on a `push` rule is ignored, and `environments` on a `push` or `pull_request` rule is ignored.
 
 ### Empty Triggers
 
@@ -184,6 +189,13 @@ function shouldCreateRun(project, event, payload):
                 continue
             return true
 
+        if event == 'deployment_status':
+            if payload.deployment_status.state != 'success':
+                continue
+            environment = payload.deployment.environment
+            if matchesAnyPattern(environment, rule.environments || ['*']):
+                return true
+
     return false
 ```
 
@@ -215,6 +227,10 @@ If multiple rules match the same event, only one run is created. The evaluation 
 #### 5. Tag pushes
 
 Pushes to tags (`refs/tags/*`) are ignored. The `extractBranch` function returns null for tag refs, and the evaluation returns false.
+
+#### 6. Deployment status events
+
+`deployment_status` events are only processed when `state` is `"success"`. Events with other states (`pending`, `failure`, `error`, `inactive`) are ignored before trigger rule evaluation. This is handled in the webhook handler, not in the trigger rule evaluator (see spec 06, section 4.7).
 
 ---
 
@@ -280,6 +296,40 @@ The UI provides pre-built templates for common configurations. Templates are a U
 **Best for:** Maximum coverage. Every branch push gets visual testing. Highest usage -- best for paid tiers where screenshot quotas are larger.
 
 **Template key:** `all`
+
+### Deployment (Preview)
+
+```json
+{
+  "triggers": [
+    {
+      "event": "deployment_status",
+      "environments": ["preview"]
+    }
+  ]
+}
+```
+
+**Best for:** Projects using preview deployment platforms (Vercel, Netlify, Render, Cloudflare Pages, etc.). Visual tests run when a preview deployment succeeds, using the deployment URL as the test target. Requires the project to use external serve mode (`serve.url` in config). See spec 02, section 3.2.3.
+
+**Template key:** `deployment_preview`
+
+### Deployment (All Environments)
+
+```json
+{
+  "triggers": [
+    {
+      "event": "deployment_status",
+      "environments": ["*"]
+    }
+  ]
+}
+```
+
+**Best for:** Projects that want visual tests on every successful deployment, regardless of environment. Use with caution — production deployments will also trigger runs.
+
+**Template key:** `deployment_all`
 
 ### Manual Only
 
@@ -418,10 +468,12 @@ The PUT endpoint validates the request body before saving. Validation errors ret
 |------|---------------|
 | `triggers` is not an array | `'triggers' must be an array` |
 | Rule object missing `event` field | `'event' is required` |
-| `event` is not `push` or `pull_request` | `'event' must be 'push' or 'pull_request'` |
+| `event` is not `push`, `pull_request`, or `deployment_status` | `'event' must be 'push', 'pull_request', or 'deployment_status'` |
 | `actions` contains an invalid action | `Invalid action '{value}'. Allowed: opened, synchronize, reopened, closed` |
 | `actions` is set on a `push` rule | `'actions' is not valid for push rules; use 'branches' instead` |
 | `branches` is set on a `pull_request` rule | `'branches' is not valid for pull_request rules; use 'base_branches' or 'head_branches'` |
+| `environments` is set on a `push` or `pull_request` rule | `'environments' is not valid for {event} rules` |
+| `actions` or `branches` is set on a `deployment_status` rule | `'{field}' is not valid for deployment_status rules; use 'environments' instead` |
 | `branches` / `base_branches` / `head_branches` contains an empty string | `Branch pattern must not be empty` |
 | A branch pattern contains invalid glob syntax | `Invalid glob pattern: '{value}'` |
 | `triggers` array exceeds 20 rules | `Maximum of 20 trigger rules allowed` |
@@ -447,7 +499,7 @@ Trigger Rules
 ────────────────
 Configure which GitHub events trigger visual test runs.
 
-Quick setup: [PRs only] [PRs + main] [All] [Manual only]
+Quick setup: [PRs only] [PRs + main] [All] [Deployment] [Manual only]
 
 ─── or configure manually ───
 
@@ -459,6 +511,9 @@ Quick setup: [PRs only] [PRs + main] [All] [Manual only]
 ☑ Pushes
   Branches: [main                                ]
 
+☐ Deployment Status
+  Environments: [preview                         ]
+
 [Save trigger rules]
 ```
 
@@ -469,7 +524,9 @@ Quick setup: [PRs only] [PRs + main] [All] [Manual only]
 - **Save** sends a `PUT /api/v1/projects/:id/triggers` request. On success, a toast notification confirms the save. On validation error (422), the error messages are displayed inline next to the offending fields.
 - **Branch fields** accept comma-separated values. Each value is trimmed of whitespace. Glob patterns (`*`, `**`, `!prefix/*`) are supported and validated on save.
 - **Action checkboxes** control the `actions` array for the `pull_request` rule. At least one action must be checked if the Pull Requests checkbox is enabled.
-- **Disabling both checkboxes** (Pull Requests and Pushes both unchecked) produces an empty `triggers: []` array, equivalent to the "Manual only" template.
+- **Environment fields** accept comma-separated values (for `deployment_status` rules). Each value is trimmed of whitespace. Glob patterns are supported and validated on save.
+- **Disabling all checkboxes** (Pull Requests, Pushes, and Deployment Status all unchecked) produces an empty `triggers: []` array, equivalent to the "Manual only" template.
+- **Deployment Status checkbox** shows a hint when enabled: "Requires external serve mode. Configure `serve.url` in your .megatest/config.yml." with a link to the external serve mode documentation.
 
 ### Initial State
 
@@ -482,7 +539,7 @@ No trigger rules configured. Set up trigger rules to enable automatic
 visual testing from GitHub events.
 
 Quick setup:
-  [PRs only]  [PRs + main]  [All]  [Manual only]
+  [PRs only]  [PRs + main]  [All]  [Deployment]  [Manual only]
 
 Or configure manually below.
 ```
@@ -594,7 +651,7 @@ This spec is referenced by and interacts with the following specs:
 | 03 - Data Model | `projects` table | `trigger_rules` JSONB column stores the trigger configuration. |
 | 04 - API | Section 2.1 (webhooks) | Webhook handler evaluates trigger rules before creating runs. |
 | 04 - API | Section 3.8 | `GET/PUT /api/v1/projects/:id/triggers` endpoints. |
-| 06 - GitHub | Sections 4.1, 4.2 | Push and pull_request webhook handlers check trigger rules. Merged PRs bypass trigger rules. |
+| 06 - GitHub | Sections 4.1, 4.2, 4.7 | Push, pull_request, and deployment_status webhook handlers check trigger rules. Merged PRs bypass trigger rules. |
 | 07 - Review UI | Project settings tab | Trigger rules editor UI. |
 | 09 - SaaS Platform | Quotas | Trigger rules affect run volume, which affects screenshot quota consumption. |
 | 10 - Onboarding | Project setup | New projects are prompted to configure trigger rules during onboarding. |

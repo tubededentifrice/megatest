@@ -65,10 +65,11 @@ setup:                    # Optional. Environment setup instructions.
   system: [string]
   install: [string]
   serve:
-    cmd: string
+    cmd: string           # Managed mode: start a dev server in a container
     ready: string
     timeout: number
     env: object
+    url: string           # External mode: test against an already-deployed URL
   prepare: [string]
 
 defaults:                 # Optional. Default values for all workflows.
@@ -93,9 +94,12 @@ variables:                # Optional. Key-value variable bindings.
 
 ### 3.2 `setup` (optional)
 
-Defines how to prepare the runtime environment inside the container. Steps execute in order: `system` -> `install` -> `serve` -> (wait for ready) -> `prepare`.
+Defines how to prepare the runtime environment. Setup operates in one of two modes:
 
-If `setup` is omitted entirely, the runner assumes the application is already running and accessible.
+- **Managed mode** (`serve.cmd` is set): Megatest clones the repo, spins up a Docker container, installs dependencies, and starts a dev server. Steps execute in order: `system` -> `install` -> `serve` (start cmd, wait for ready) -> `prepare`. This is the default mode.
+- **External mode** (`serve.url` is set): Megatest tests against an already-deployed URL (e.g., a Vercel preview deployment, a staging server, or any externally-hosted environment). No Docker container is created for the app. The `system`, `install`, and `prepare` fields are ignored.
+
+If `setup` is omitted entirely, the runner assumes the application is already running and accessible. In this case, the runner requires a `deploy_url_template` in project settings or a `deployment_status` trigger to know where the app is (see spec 13).
 
 #### 3.2.1 `setup.system` (optional)
 
@@ -115,7 +119,9 @@ If `setup` is omitted entirely, the runner assumes the application is already ru
 #### 3.2.3 `setup.serve` (optional)
 
 - **Type:** `object`
-- **Description:** Defines a long-running dev server process. The runner starts this command in the background, then polls `ready` until it returns HTTP 200.
+- **Description:** Defines how the application under test is served. Supports two mutually exclusive modes: **managed** (start a dev server in a container) and **external** (test against an already-deployed URL).
+
+##### Managed Mode (default)
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
@@ -124,9 +130,50 @@ If `setup` is omitted entirely, the runner assumes the application is already ru
 | `timeout` | `number` | No | `120` | Maximum seconds to wait for the ready URL. Must be a positive integer. If exceeded, the run fails with a setup timeout error. |
 | `env` | `object` | No | `{}` | Additional environment variables for the server process. Keys are variable names, values are strings. Supports variable interpolation in values. |
 
-- If `serve` is present, both `cmd` and `ready` are required. Omitting either is a validation error.
-- If `serve` is omitted, no server is started. The `prepare` step (if any) runs immediately after `install`.
+- If `cmd` is present, `ready` is required. Omitting `ready` when `cmd` is set is a validation error.
 - The server process is expected to remain running for the duration of all workflow execution. If it exits prematurely, the run fails.
+
+##### External Mode
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `url` | `string` | Yes | -- | URL of the externally-hosted application. Supports variable interpolation (e.g., `"${DEPLOY_URL}"`). |
+| `timeout` | `number` | No | `120` | Maximum seconds to wait for the URL to return HTTP 200. |
+
+- If `url` is present, `cmd` and `ready` must NOT be set (validation error).
+- When `url` is set, the runner skips Docker container creation entirely. The `system`, `install`, and `prepare` sections are ignored (validation warning if present).
+- The runner polls the `url` with HTTP GET requests until it returns a 200 status code. This handles the common case where a preview deployment is still provisioning when the run starts.
+- The resolved URL is stored on the run record as `deploy_url` for debugging (see spec 03).
+- Playwright navigates to the external URL using the `open` step's path appended to the `url` as the base.
+
+**Example -- static staging URL:**
+```yaml
+setup:
+  serve:
+    url: "https://staging.example.com"
+```
+
+**Example -- preview deployment URL via variable:**
+```yaml
+setup:
+  serve:
+    url: "${DEPLOY_URL}"
+    timeout: 180
+```
+
+The `DEPLOY_URL` variable is populated automatically when a run is triggered by a `deployment_status` event (see spec 13), or resolved from the project's `deploy_url_template` setting (see spec 03). It can also be set manually in the `variables` section.
+
+##### Mode Resolution
+
+| `cmd` set | `url` set | Mode | Behavior |
+|-----------|-----------|------|----------|
+| Yes | No | Managed | Clone, Docker, build, serve |
+| No | Yes | External | Poll external URL, no Docker |
+| Yes | Yes | -- | Validation error |
+| No | No | -- | `serve` is effectively omitted |
+
+- If `serve` is omitted entirely, no server is started in managed mode. In this case, the runner requires the deploy URL to come from project settings or the trigger event.
+- If `serve` is omitted and no deploy URL is available, the run fails with error: "No serve command or external URL configured."
 
 #### 3.2.4 `setup.prepare` (optional)
 
@@ -555,6 +602,7 @@ Variables are referenced using `${...}` syntax within string values:
 Interpolation is performed in the following contexts:
 
 - `setup.serve.cmd`
+- `setup.serve.url`
 - `setup.serve.env` values
 - `setup.prepare` commands
 - All step string values (URLs in `open`, text in `fill`/`type`, locator values, JavaScript in `eval`, etc.)
@@ -568,9 +616,16 @@ Interpolation does NOT apply to:
 
 ### 8.3 Resolution Order
 
-1. `${VAR_NAME}` is resolved from `config.yml` `variables` first.
-2. `${env:VAR_NAME}` is resolved from the runtime environment.
-3. If a variable is not found, interpolation fails and the run reports an error before execution begins.
+1. **Built-in run variables** are injected first. These are read-only and cannot be overridden by `variables` in config:
+   | Variable | Description | Source |
+   |----------|-------------|--------|
+   | `DEPLOY_URL` | The external deployment URL for the current run. | `deployment_status` event payload, or project `deploy_url_template` with interpolated run metadata. Only set for external serve mode runs. |
+   | `BRANCH` | The branch being tested. | Run metadata (always available). |
+   | `COMMIT_SHA` | The full 40-character commit SHA. | Run metadata (always available). |
+   | `PR_NUMBER` | The pull request number. | Run metadata (only set for PR-triggered runs). |
+2. `${VAR_NAME}` is resolved from `config.yml` `variables`.
+3. `${env:VAR_NAME}` is resolved from the runtime environment (project secrets).
+4. If a variable is not found, interpolation fails and the run reports an error before execution begins.
 
 ### 8.4 Escaping
 
@@ -1408,6 +1463,9 @@ steps:
 | `steps: []` in a workflow or include | Validation error: steps must be non-empty. |
 | `viewports: []` in a workflow | Validation error: viewports array must be non-empty if present. Omit the field entirely to use the default. |
 | `setup` present but all sub-fields omitted | Valid. Equivalent to omitting `setup` entirely. |
+| `serve.cmd` and `serve.url` both set | Validation error: managed and external modes are mutually exclusive. |
+| `serve.url` set with `system`, `install`, or `prepare` | Validation warning: these fields are ignored in external mode. |
+| `serve.url` references `${DEPLOY_URL}` but no source configured | Run fails at interpolation with "variable DEPLOY_URL not found". |
 | `variables: {}` | Valid. No variables defined. |
 | `viewports: {}` | Valid. No named viewports defined. Only `"desktop"` is available via the built-in default. |
 
@@ -1425,7 +1483,9 @@ Screenshot names must be unique within a single workflow's steps (after include 
 
 ### 13.5 Server Startup Failure
 
-If `setup.serve.cmd` exits before the `ready` URL returns 200, the run fails immediately with the server's stderr output included in the error. If the `timeout` is exceeded without a 200 response, the run fails with a timeout error and the server process is killed.
+**Managed mode:** If `setup.serve.cmd` exits before the `ready` URL returns 200, the run fails immediately with the server's stderr output included in the error. If the `timeout` is exceeded without a 200 response, the run fails with a timeout error and the server process is killed.
+
+**External mode:** If the `serve.url` does not return HTTP 200 within the `timeout` period, the run fails with error: "External URL {url} did not become ready within {timeout}s". The worker logs the last HTTP status code and any connection error for debugging.
 
 ### 13.6 Step Timeout
 

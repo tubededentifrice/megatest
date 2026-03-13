@@ -111,6 +111,7 @@ CREATE TABLE projects (
     repo_id           INTEGER NOT NULL,           -- GitHub's numeric repo ID
     default_branch    TEXT DEFAULT 'main',
     config_repo_url   TEXT,                       -- URL of the config repo. When NULL, config is read from the project repo itself.
+    deploy_url_template TEXT,                     -- URL pattern for external serve mode (e.g. "https://${BRANCH}.preview.example.com"). Supports ${BRANCH}, ${COMMIT_SHA}, ${PR_NUMBER}. When set, the resolved URL is injected as the DEPLOY_URL built-in variable.
     settings          JSONB,                      -- operational settings only (e.g. branch filters, run timeout)
     secrets           JSONB,                      -- encrypted project secrets for ${env:VAR}
     trigger_rules     JSONB,                      -- per-project trigger configuration (see spec 13)
@@ -129,12 +130,13 @@ One execution triggered by a commit push or pull request event. A run walks thro
 CREATE TABLE runs (
     id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id        UUID NOT NULL REFERENCES projects(id),
-    trigger           TEXT NOT NULL,              -- "push" | "pull_request" | "manual"
+    trigger           TEXT NOT NULL,              -- "push" | "pull_request" | "deployment_status" | "manual"
     branch            TEXT NOT NULL,              -- head branch
     commit_sha        TEXT NOT NULL,
     base_branch       TEXT,                       -- target branch (for PRs)
     base_sha          TEXT,                       -- target SHA (for PRs)
     pr_number         INTEGER,
+    deploy_url        TEXT,                       -- resolved external URL for this run (set in external serve mode)
     status            TEXT DEFAULT 'queued',      -- queued|cloning|setting_up|running|comparing|completed|failed|cancelled
     result            TEXT,                       -- pass|fail|error (set when status = completed)
     error_message     TEXT,

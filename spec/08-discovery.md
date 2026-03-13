@@ -55,14 +55,23 @@ The discovery agent relies on two core capabilities of Playwright:
 
 ### 3.1 Setup Phase
 
-The setup phase is identical to a regular Megatest run:
+The setup phase follows the same serve mode logic as regular Megatest runs (see spec 05, section 3.3):
 
+**Managed mode (default):**
 1. Clone the repository at the specified branch (or default branch)
 2. Parse any existing `.megatest/config.yml` if present (may not exist for first discovery)
 3. Start the Docker container with the user's application
 4. Wait for the app to become ready (poll the serve.ready URL or port)
 
 If this is first discovery and no config.yml exists, the agent enters **setup detection mode** (Section 4) to figure out how to install dependencies and start the app.
+
+**External mode** (`serve.url` is set or `deploy_url_template` is configured):
+1. Clone the repository (for config and project metadata)
+2. Resolve the external URL (from config or project settings)
+3. Poll the external URL until it returns HTTP 200
+4. Explore the running app at the external URL
+
+In external mode, discovery skips setup detection (Section 4) since the app is already deployed. The agent uses the external URL directly for exploration. This is useful when the project already has a running staging or preview environment.
 
 ### 3.1b Auto-Discovery on Repo Connection
 

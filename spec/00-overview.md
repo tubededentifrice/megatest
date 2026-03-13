@@ -9,9 +9,11 @@ Megatest is a visual regression testing SaaS (hosted at megatest.dev) with an op
 ## Core Flow
 
 ```
-1. Developer pushes a commit or opens a PR
+1. Developer pushes a commit, opens a PR, or a preview deployment succeeds
 2. GitHub sends a webhook to Megatest
-3. Megatest clones the repo, spins up the app in a Docker container
+3. Megatest either:
+   a. Managed mode: clones the repo, spins up the app in a Docker container
+   b. External mode: connects to the preview/staging deployment URL
 4. Playwright on the worker host runs the configured workflows,
    taking screenshots at defined checkpoints
 5. Screenshots are compared against baselines using pixelmatch
@@ -30,7 +32,7 @@ Megatest is a visual regression testing SaaS (hosted at megatest.dev) with an op
 | Element targeting | Playwright locators (CSS, role, text, testid, label) | Flexible targeting via page.locator(), page.getByRole(), page.getByText(), page.getByTestId(), page.getByLabel() |
 | Image diffing | pixelmatch | Standard, fast, pure JS, battle-tested |
 | Auth model | Multi-tenant GitHub OAuth | Users log in via GitHub, access scoped to their repos |
-| Worker isolation | Docker per run | User code runs in containers; browser runs on host |
+| Worker isolation | Docker per run (managed) or external URL | Managed: user code runs in containers; browser on host. External: test against preview deployments (Vercel, Netlify, etc.) |
 | Git provider | GitHub only (MVP) | GitLab is a future extension |
 | Job queue | BullMQ + Redis | Reliable, supports concurrency controls and retries |
 | Database | PostgreSQL | Simplifies deployment, required for concurrent SaaS operation |
@@ -39,7 +41,7 @@ Megatest is a visual regression testing SaaS (hosted at megatest.dev) with an op
 | Deployment model | Hosted SaaS + open-source self-hosting | megatest.dev as primary, Docker Compose for self-hosted |
 | Config storage | Git repository (config repo) | Single model: separate config repo by default, or same repo as project. Avoids needing write access to the project repo. |
 | LLM provider | Configurable (Claude, OpenAI, etc.) | Provider abstraction; users bring their own API key. Best for open-source. |
-| Trigger configuration | Server-side project settings | Operational config, not test definition; avoids bootstrap problem |
+| Trigger configuration | Server-side project settings | Operational config, not test definition; avoids bootstrap problem. Supports push, pull_request, and deployment_status events. |
 | Pricing | Free tier + usage-based paid | Free for small projects (500 screenshots/month, 3 projects), paid per screenshot/run |
 
 ## Spec Documents

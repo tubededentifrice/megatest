@@ -39,6 +39,7 @@ interface RunJob {
   baseBranch: string | null; // Target branch for PRs, null for push runs
   prNumber: number | null;  // GitHub PR number, null for push runs
   installationId: number;   // GitHub App installation ID (for auth)
+  deployUrl: string | null; // External deploy URL (from deployment_status event or deploy_url_template). Null for managed mode runs.
 }
 ```
 
@@ -80,13 +81,16 @@ Infrastructure failures are distinguished from test failures by error type. The 
 
 ---
 
-## 2. Docker Isolation Model
+## 2. Serve Modes
 
-Every run executes inside a fresh Docker container. The container runs the
-user's application (clone, install, dev server). The browser and comparison
-logic run alongside the worker process, outside the user app container.
+The worker supports two serve modes, determined by the project's `.megatest/config.yml`:
 
-### Architecture
+- **Managed mode** (`serve.cmd` is set): Megatest spins up a Docker container, clones the repo, installs dependencies, and starts a dev server. This is the default mode.
+- **External mode** (`serve.url` is set): Megatest tests against an already-deployed URL. No Docker container is created for the application. This is used with preview deployments (Vercel, Netlify, Render, Cloudflare Pages, etc.), staging servers, or any externally-hosted environment.
+
+In both modes, Playwright and the worker process run on the worker host. The only difference is where the application under test is hosted.
+
+### 2.1 Managed Mode Architecture
 
 ```
 +-----------------------------+     +-------------------------+
@@ -107,7 +111,27 @@ user app container. The worker creates a per-run Docker bridge network and
 attaches the app container with a stable alias. Playwright connects to the
 rewritten `serve.ready` URL on that private network.
 
-### Base Image
+### 2.2 External Mode Architecture
+
+```
++-----------------------------+           +-------------------------+
+| Worker Runtime              |           | External Server         |
+|                             |           | (Vercel, Netlify, etc.) |
+| Playwright --- https://preview-xyz.vercel.app ------------->     |
+|   (Chromium)                |           |                         |
+|                             |           |                         |
+| Worker process              |           |                         |
+|   - orchestrates steps      |           |                         |
+|   - runs pixelmatch         |           |                         |
+|   - uploads to storage      |           |                         |
++-----------------------------+           +-------------------------+
+```
+
+No Docker container or bridge network is created. Playwright connects
+directly to the external URL over the public internet. The worker still
+clones the repo to parse `.megatest/` config and fetch baselines.
+
+### 2.3 Base Image (Managed Mode Only)
 
 The default base image is `megatest/runner:latest`, which includes:
 
@@ -118,7 +142,7 @@ The default base image is `megatest/runner:latest`, which includes:
 
 Users can install additional system packages via `setup.system` commands, which run as root inside the container.
 
-### Container Configuration
+### 2.4 Container Configuration (Managed Mode Only)
 
 ```ts
 const container = await docker.createContainer({
@@ -136,7 +160,7 @@ const container = await docker.createContainer({
 });
 ```
 
-### Resource Limits
+### 2.5 Resource Limits (Managed Mode Only)
 
 | Resource | Limit |
 |----------|-------|
@@ -145,7 +169,7 @@ const container = await docker.createContainer({
 | Disk | 10 GB |
 | Network | Dedicated bridge network per run |
 
-### Tier-Aware Resource Limits (SaaS)
+### 2.6 Tier-Aware Resource Limits (SaaS, Managed Mode Only)
 
 In the hosted SaaS, container resource limits vary by the organization's tier:
 
@@ -158,7 +182,7 @@ In the hosted SaaS, container resource limits vary by the organization's tier:
 
 The worker reads the org's tier from the job data and applies the corresponding limits when creating the container.
 
-### Container Lifecycle
+### 2.7 Container Lifecycle (Managed Mode Only)
 
 1. **Created** -- `docker.createContainer()`
 2. **Started** -- `container.start()`
@@ -219,10 +243,13 @@ Read and validate all configuration files from the cloned repo's `.megatest/` di
 2. Parse all files matching `.megatest/workflows/*.yml` -- each defines one workflow.
 3. Parse all files matching `.megatest/includes/*.yml` -- each defines a named step sequence.
 4. Validate each file against its JSON Schema. Abort with a descriptive error on validation failure.
-5. Resolve variables:
+5. Inject built-in run variables (`BRANCH`, `COMMIT_SHA`, `PR_NUMBER`, `DEPLOY_URL`) into the variable context. See spec 02, section 8.3 for the full list and resolution order.
+6. Resolve variables:
+   - Built-in run variables are checked first (cannot be overridden).
    - `${VAR_NAME}` -- looked up from `config.yml` variables section.
-   - `${env:VAR_NAME}` -- looked up from project secrets stored in the database. These are decrypted at this stage and injected into the Docker container's environment.
-6. Resolve includes: replace `include: name` steps with the corresponding steps from `.megatest/includes/{name}.yml`. Includes may reference other includes (nested), but **circular includes are detected and cause an error**. Detection uses a visited-set during recursive resolution.
+   - `${env:VAR_NAME}` -- looked up from project secrets stored in the database. These are decrypted at this stage and injected into the Docker container's environment (managed mode) or kept in-process (external mode).
+7. Resolve includes: replace `include: name` steps with the corresponding steps from `.megatest/includes/{name}.yml`. Includes may reference other includes (nested), but **circular includes are detected and cause an error**. Detection uses a visited-set during recursive resolution.
+8. Determine serve mode: check if `setup.serve.url` is set (external mode) or `setup.serve.cmd` is set (managed mode).
 
 If no workflows are found, the run fails with error: "No workflow files found in .megatest/workflows/".
 
@@ -236,9 +263,13 @@ The worker resolves config from a Git repository based on the project's `config_
 
 The `config_repo_url` is included in the job data so the worker knows which source to use without an extra API call.
 
-### 3.3 Docker Setup
+### 3.3 App Setup
 
-Build or pull the base image, create and configure the container, run setup commands, and start the dev server.
+This phase prepares the application under test. The behavior depends on the serve mode determined during config parsing.
+
+#### 3.3a Managed Mode (Docker Setup)
+
+When `setup.serve.cmd` is set, the worker builds or pulls the base image, creates a Docker container, runs setup commands, and starts the dev server.
 
 **Sequence:**
 
@@ -270,6 +301,35 @@ Build or pull the base image, create and configure the container, run setup comm
    - On timeout: capture the last 50 lines of serve.cmd output and include in the error message ("Server failed to start within {timeout}s").
 
 9. **Run `setup.prepare` commands** (if any) -- executed as the `app` user. These run after the server is healthy. Useful for seeding a database or warming caches.
+
+#### 3.3b External Mode (External URL)
+
+When `setup.serve.url` is set, the worker skips Docker container creation entirely and tests against the external URL.
+
+**Sequence:**
+
+1. **Resolve the deploy URL.** The `serve.url` value is already interpolated during config parsing (step 6 of section 3.2). The resolved URL is stored on the run record as `deploy_url`.
+
+2. **Poll the deploy URL** with HTTP GET requests until it returns a 200 status code:
+   - Poll interval: 3 seconds (longer than managed mode because external deployments may take time to provision).
+   - Timeout: `serve.timeout` from config, default 120 seconds.
+   - On timeout: run fails with error: "External URL {url} did not become ready within {timeout}s". The worker logs the last HTTP status code and any connection errors.
+   - Accept any 2xx status as ready (not just 200), to accommodate various deployment platforms.
+   - Follow redirects (up to 5). The final resolved URL is used for workflow execution.
+
+3. **Set the app base URL** to the resolved deploy URL. The `open` step in workflows will resolve paths relative to this base URL (e.g., `open: /pricing` becomes `https://preview-xyz.vercel.app/pricing`).
+
+**What is skipped in external mode:**
+- No Docker container, network, or image pull.
+- `setup.system`, `setup.install`, and `setup.prepare` are not executed (there is no container to run them in).
+- No container cleanup is needed after the run.
+
+**URL resolution priority:**
+The `DEPLOY_URL` built-in variable is populated from the first available source:
+1. The `deployment_status` webhook payload (`deployment_status.environment_url` or `deployment_status.target_url`), when the run was triggered by a `deployment_status` event.
+2. The project's `deploy_url_template` setting, with run metadata interpolated (`${BRANCH}`, `${COMMIT_SHA}`, `${PR_NUMBER}`).
+3. A literal value in `config.yml` variables: `variables: { DEPLOY_URL: "https://staging.example.com" }`.
+If none of these sources provide a value and `serve.url` references `${DEPLOY_URL}`, the run fails at variable interpolation with "variable DEPLOY_URL not found".
 
 ### 3.4 Fetch Baselines
 
@@ -522,7 +582,7 @@ The route detection job is a lightweight, separate queue (`megatest:route-detect
 
 Cleanup runs unconditionally in a `finally` block, regardless of whether the run succeeded, failed, or threw an unhandled exception.
 
-**Steps:**
+**Steps (managed mode):**
 
 1. **Kill and remove the Docker container:**
    ```ts
@@ -547,19 +607,33 @@ Cleanup runs unconditionally in a `finally` block, regardless of whether the run
    ```
    This ensures all Chromium processes spawned by Playwright for this run are terminated, even if they were not properly closed during execution (e.g., due to an early abort).
 
+**Steps (external mode):**
+
+1. **Remove the temporary directory** (contains cloned repo and screenshots):
+   ```
+   rm -rf /tmp/megatest-{runId}/
+   ```
+
+2. **Close any remaining Playwright browser instances:**
+   ```ts
+   await browser.close();
+   ```
+
+Steps 1-2 from managed mode (container kill/remove, network removal) are skipped because no container was created.
+
 If cleanup itself fails (e.g., Docker daemon unreachable), the error is logged but does not affect the run result (which has already been recorded).
 
 ---
 
 ## 4. Timeouts
 
-| Scope | Default | Configurable | Config Path |
-|-------|---------|--------------|-------------|
-| Total run | 10 min | Yes | Project settings (database) |
-| Docker setup (pull + create + start) | 2 min | No | -- |
-| `serve.ready` polling | 120s | Yes | `serve.timeout` in config.yml |
-| Individual step | 30s | Yes | `defaults.timeout` in config.yml |
-| Screenshot comparison | 10s per image | No | -- |
+| Scope | Default | Configurable | Config Path | Applies to |
+|-------|---------|--------------|-------------|------------|
+| Total run | 10 min | Yes | Project settings (database) | Both modes |
+| Docker setup (pull + create + start) | 2 min | No | -- | Managed only |
+| `serve.ready` / `serve.url` polling | 120s | Yes | `serve.timeout` in config.yml | Both modes |
+| Individual step | 30s | Yes | `defaults.timeout` in config.yml | Both modes |
+| Screenshot comparison | 10s per image | No | -- | Both modes |
 
 The total run timeout is enforced by wrapping the entire `processRun` function in a `Promise.race` with a timeout. When the total timeout fires:
 
@@ -574,21 +648,24 @@ The total run timeout is enforced by wrapping the entire `processRun` function i
 
 Each failure mode is handled specifically to provide actionable error messages.
 
-| Failure | Classification | Behavior |
-|---------|---------------|----------|
-| Docker pull/build failure | Infrastructure | Run fails with error. Message includes Docker output. Retryable. |
-| `setup.system` command fails | User config | Run fails. Message includes command, exit code, and stderr. Not retryable. |
-| `setup.install` command fails | User config | Run fails. Message includes command, exit code, and stderr. Not retryable. |
-| `serve.ready` timeout | User config | Run fails. Message: "Server failed to start within {N}s". Includes last 50 lines of serve.cmd output. Not retryable. |
-| `serve.cmd` exits unexpectedly | User config | Run fails. Message: "Dev server exited with code {N}". Includes captured output. Not retryable. |
-| Step timeout | Test error | Checkpoint status = `error`. Message: "Step timed out after {N}s". Remaining steps in that workflow/viewport pair are skipped. Other pairs continue. |
-| Playwright/Chromium crash (mid-session) | Infrastructure | Attempt to relaunch the browser and retry the current step once. If relaunch fails, mark all remaining checkpoints in that workflow/viewport pair as `error`. Other pairs continue. |
-| Playwright/Chromium crash (all sessions) | Infrastructure | Mark all remaining checkpoints as `error`. Run result = `error`. Retryable. |
-| Out of memory (container OOM killed) | Infrastructure | Detected via container exit code 137. Run fails with "Container killed: out of memory". Retryable. |
-| Disk quota exceeded | Infrastructure | Run fails with "Container disk quota exceeded". Retryable. |
-| Unhandled exception | Infrastructure | Run fails. Error message and stack trace saved. Cleanup runs in `finally` block. Retryable. |
-| Storage upload failure | Infrastructure | Retry upload 3 times with exponential backoff. If all retries fail, checkpoint is marked as `error`. |
-| GitHub API failure (status/comment) | Infrastructure | Retry 3 times with exponential backoff. If all retries fail, log the error but do not fail the run (results are already recorded). |
+| Failure | Classification | Mode | Behavior |
+|---------|---------------|------|----------|
+| Docker pull/build failure | Infrastructure | Managed | Run fails with error. Message includes Docker output. Retryable. |
+| `setup.system` command fails | User config | Managed | Run fails. Message includes command, exit code, and stderr. Not retryable. |
+| `setup.install` command fails | User config | Managed | Run fails. Message includes command, exit code, and stderr. Not retryable. |
+| `serve.ready` timeout | User config | Managed | Run fails. Message: "Server failed to start within {N}s". Includes last 50 lines of serve.cmd output. Not retryable. |
+| `serve.cmd` exits unexpectedly | User config | Managed | Run fails. Message: "Dev server exited with code {N}". Includes captured output. Not retryable. |
+| `serve.url` timeout | User config | External | Run fails. Message: "External URL {url} did not become ready within {N}s". Includes last HTTP status. Not retryable. |
+| `serve.url` DNS / connection error | Infrastructure | External | Retry with backoff (3 attempts). If all fail, run fails with "Cannot reach external URL {url}: {error}". Retryable. |
+| `DEPLOY_URL` variable not found | User config | External | Run fails at config parsing. Message: "Variable DEPLOY_URL not found. Configure a deploy_url_template in project settings or use a deployment_status trigger." Not retryable. |
+| Step timeout | Test error | Both | Checkpoint status = `error`. Message: "Step timed out after {N}s". Remaining steps in that workflow/viewport pair are skipped. Other pairs continue. |
+| Playwright/Chromium crash (mid-session) | Infrastructure | Both | Attempt to relaunch the browser and retry the current step once. If relaunch fails, mark all remaining checkpoints in that workflow/viewport pair as `error`. Other pairs continue. |
+| Playwright/Chromium crash (all sessions) | Infrastructure | Both | Mark all remaining checkpoints as `error`. Run result = `error`. Retryable. |
+| Out of memory (container OOM killed) | Infrastructure | Managed | Detected via container exit code 137. Run fails with "Container killed: out of memory". Retryable. |
+| Disk quota exceeded | Infrastructure | Managed | Run fails with "Container disk quota exceeded". Retryable. |
+| Unhandled exception | Infrastructure | Both | Run fails. Error message and stack trace saved. Cleanup runs in `finally` block. Retryable. |
+| Storage upload failure | Infrastructure | Both | Retry upload 3 times with exponential backoff. If all retries fail, checkpoint is marked as `error`. |
+| GitHub API failure (status/comment) | Infrastructure | Both | Retry 3 times with exponential backoff. If all retries fail, log the error but do not fail the run (results are already recorded). |
 
 **Retryable vs non-retryable:** Only infrastructure errors trigger BullMQ's automatic retry (up to 1 retry). User config errors and test failures are recorded as final results immediately.
 
@@ -601,7 +678,7 @@ Each failure mode is handled specifically to provide actionable error messages.
 | Workers per instance | 2 | Each worker handles one run at a time. Configured via BullMQ `concurrency`. |
 | Concurrent runs per project | 1 | Enforced via BullMQ group concurrency on `projectId`. Prevents race conditions on baselines. |
 | Concurrent workflow/viewport pairs | 3 | Each pair gets its own Playwright BrowserContext (sharing a single Chromium instance for efficiency). Configured by the worker, not by schema v1. |
-| Max concurrent Docker containers | 4 | Global semaphore across all workers in the process. Prevents resource exhaustion on the host. |
+| Max concurrent Docker containers | 4 | Global semaphore across all workers in the process. Prevents resource exhaustion on the host. External mode runs do not consume a container slot. |
 
 **Why 1 concurrent run per project:** Baseline management requires serial execution. If two runs for the same project execute simultaneously, they could both read the same baselines, both generate "new" results, and create conflicting baseline records when approved. Serial execution per project avoids this entirely.
 
