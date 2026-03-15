@@ -1,5 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { createCodec } from '../codec/index.js';
+import { loadConfig } from '../config/loader.js';
 
 export async function runAccept(repoPath: string, checkpoint?: string): Promise<number> {
   const megatestDir = path.resolve(repoPath, '.megatest');
@@ -11,8 +13,17 @@ export async function runAccept(repoPath: string, checkpoint?: string): Promise<
     return 1;
   }
 
-  // Get all PNG files in actuals/
-  const files = fs.readdirSync(actualsDir).filter((f) => f.endsWith('.png'));
+  // Determine format from config
+  let ext = '.png';
+  try {
+    const config = loadConfig(repoPath);
+    ext = createCodec(config.config.defaults.format).extension;
+  } catch {
+    // Fall back to .png if config can't be loaded
+  }
+
+  // Get all image files in actuals/
+  const files = fs.readdirSync(actualsDir).filter((f) => f.endsWith(ext));
 
   if (files.length === 0) {
     console.log('No screenshots to accept.');
@@ -22,10 +33,10 @@ export async function runAccept(repoPath: string, checkpoint?: string): Promise<
   // Filter by checkpoint name if specified
   let toAccept = files;
   if (checkpoint) {
-    // Checkpoint files are named <checkpoint>-<viewport>.png
+    // Checkpoint files are named <checkpoint>-<viewport><ext>
     // Extract checkpoint by removing the last -<segment> (viewport name) from the filename
     toAccept = files.filter((f) => {
-      const withoutExt = f.replace('.png', '');
+      const withoutExt = f.replace(ext, '');
       const lastDash = withoutExt.lastIndexOf('-');
       if (lastDash === -1) return withoutExt === checkpoint;
       const cpName = withoutExt.substring(0, lastDash);

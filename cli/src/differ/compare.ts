@@ -1,5 +1,4 @@
-import * as fs from 'node:fs';
-import { PNG } from 'pngjs';
+import type { ImageCodec } from '../codec/index.js';
 
 export interface CompareResult {
   diffPixels: number;
@@ -13,31 +12,32 @@ export async function compareScreenshots(
   actualPath: string,
   diffOutputPath: string,
   threshold: number, // pixelmatch per-pixel threshold (0-1), NOT the megatest percentage threshold
+  codec: ImageCodec,
 ): Promise<CompareResult> {
   // pixelmatch v6 is ESM-only; use dynamic import for CJS compatibility
   const pixelmatch = (await import('pixelmatch')).default;
 
-  const baselinePng = PNG.sync.read(fs.readFileSync(baselinePath));
-  const actualPng = PNG.sync.read(fs.readFileSync(actualPath));
+  const baseline = await codec.decode(baselinePath);
+  const actual = await codec.decode(actualPath);
 
   // Check dimension mismatch
-  if (baselinePng.width !== actualPng.width || baselinePng.height !== actualPng.height) {
+  if (baseline.width !== actual.width || baseline.height !== actual.height) {
     return {
       diffPixels: -1,
       diffPercent: 100,
-      totalPixels: baselinePng.width * baselinePng.height,
+      totalPixels: baseline.width * baseline.height,
       dimensionMismatch: true,
     };
   }
 
-  const { width, height } = baselinePng;
-  const diff = new PNG({ width, height });
+  const { width, height } = baseline;
   const totalPixels = width * height;
+  const diffData = Buffer.alloc(width * height * 4);
 
-  const diffPixels = pixelmatch(baselinePng.data, actualPng.data, diff.data, width, height, { threshold });
+  const diffPixels = pixelmatch(baseline.data, actual.data, diffData, width, height, { threshold });
 
-  // Write diff image
-  fs.writeFileSync(diffOutputPath, PNG.sync.write(diff));
+  // Write diff image via codec
+  await codec.encode({ data: diffData, width, height }, diffOutputPath);
 
   const diffPercent = (diffPixels / totalPixels) * 100;
 

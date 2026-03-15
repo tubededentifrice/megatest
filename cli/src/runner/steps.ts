@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 import type { Page } from 'playwright';
+import type { ImageCodec } from '../codec/index.js';
 import type { Step, Viewport } from '../config/schema.js';
 import { resolveLocator } from './locator.js';
 
@@ -11,6 +12,7 @@ export interface StepContext {
   viewportName: string;
   timeout: number;
   waitAfterNavigation: string;
+  codec: ImageCodec;
 }
 
 export interface StepResult {
@@ -55,12 +57,12 @@ export async function executeStep(page: Page, step: Step, ctx: StepContext): Pro
 
     case 'screenshot': {
       const name = (step as { screenshot: string }).screenshot;
-      const filename = `${name}-${ctx.viewportName}.png`;
+      const filename = `${name}-${ctx.viewportName}${ctx.codec.extension}`;
       const screenshotPath = path.join(ctx.actualsDir, filename);
-      await page.screenshot({
-        path: screenshotPath,
+      const pngBuffer = await page.screenshot({
         fullPage: ctx.screenshotMode === 'full',
       });
+      await ctx.codec.writeScreenshot(pngBuffer, screenshotPath);
       return { screenshotPath, checkpointName: name };
     }
 

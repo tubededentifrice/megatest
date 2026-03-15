@@ -11,6 +11,7 @@ export interface MegatestConfig {
     waitAfterNavigation: string; // "load", "networkidle", or ms string
     screenshotMode: 'viewport' | 'full';
     timeout: number; // per-step timeout in ms
+    format: 'png' | 'webp'; // screenshot image format
   };
   viewports: Record<string, Viewport>;
   variables: Record<string, string>;

@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import type { ImageCodec } from '../codec/index.js';
 import { type Include, type LoadedConfig, type Step, Workflow } from '../config/schema.js';
 import { interpolateStep } from '../config/variables.js';
 import { printProgress, printStepComplete, printStepError } from '../reporter/console.js';
@@ -34,6 +35,7 @@ export interface EngineOptions {
   baseUrl: string;
   workflowNames: string[];
   actualsDir: string;
+  codec: ImageCodec;
 }
 
 // Resolve includes: expand include steps inline, detect circular refs
@@ -129,6 +131,7 @@ export async function runEngine(opts: EngineOptions): Promise<CheckpointResult[]
           viewportName: vpName,
           timeout: config.config.defaults.timeout,
           waitAfterNavigation: config.config.defaults.waitAfterNavigation,
+          codec: opts.codec,
         };
 
         let stepFailed = false;

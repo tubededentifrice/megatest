@@ -24,10 +24,13 @@
     "pngjs": "^7.0.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^1.9.0",
     "@types/js-yaml": "^4.0.0",
     "@types/node": "^22.0.0",
     "@types/pngjs": "^6.0.5",
-    "@biomejs/biome": "^1.9.0",
     "typescript": "^5.4.0"
+  },
+  "optionalDependencies": {
+    "sharp": "^0.34.5"
   }
 }

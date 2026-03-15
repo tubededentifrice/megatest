@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import type { ImageCodec } from '../codec/index.js';
 import type { CheckpointResult } from '../types.js';
 import { compareScreenshots } from './compare.js';
 
@@ -8,13 +9,15 @@ export interface DiffPipelineOptions {
   actualsDir: string; // .megatest/actuals/
   reportDir: string; // .megatest/reports/<commit>/
   threshold: number; // megatest percentage threshold (e.g., 0.1 means 0.1%)
+  codec: ImageCodec;
 }
 
 export async function runDiffPipeline(
   results: CheckpointResult[],
   opts: DiffPipelineOptions,
 ): Promise<CheckpointResult[]> {
-  const { baselinesDir, reportDir, threshold } = opts;
+  const { baselinesDir, reportDir, threshold, codec } = opts;
+  const ext = codec.extension;
 
   // Ensure report directory exists
   fs.mkdirSync(reportDir, { recursive: true });
@@ -29,13 +32,13 @@ export async function runDiffPipeline(
     }
 
     // Determine baseline path
-    const filename = `${result.checkpoint}-${result.viewport}.png`;
+    const filename = `${result.checkpoint}-${result.viewport}${ext}`;
     const baselinePath = path.join(baselinesDir, filename);
 
     if (!fs.existsSync(baselinePath)) {
       // No baseline - status = "new"
       // Copy actual to report dir
-      const reportActual = path.join(reportDir, filename.replace('.png', '-actual.png'));
+      const reportActual = path.join(reportDir, `${result.checkpoint}-${result.viewport}-actual${ext}`);
       fs.copyFileSync(result.actualPath, reportActual);
 
       updated.push({
@@ -48,7 +51,7 @@ export async function runDiffPipeline(
     }
 
     // Baseline exists - compare
-    const diffFilename = filename.replace('.png', '-diff.png');
+    const diffFilename = `${result.checkpoint}-${result.viewport}-diff${ext}`;
     const diffOutputPath = path.join(reportDir, diffFilename);
 
     const comparison = await compareScreenshots(
@@ -56,11 +59,12 @@ export async function runDiffPipeline(
       result.actualPath,
       diffOutputPath,
       0.1, // pixelmatch per-pixel threshold (NOT the megatest percentage threshold)
+      codec,
     );
 
     if (comparison.dimensionMismatch) {
       // Dimension mismatch = fail
-      const reportActual = path.join(reportDir, filename.replace('.png', '-actual.png'));
+      const reportActual = path.join(reportDir, `${result.checkpoint}-${result.viewport}-actual${ext}`);
       fs.copyFileSync(result.actualPath, reportActual);
 
       updated.push({
@@ -78,8 +82,8 @@ export async function runDiffPipeline(
 
     if (comparison.diffPercent > threshold) {
       // Diff exceeds threshold = fail
-      // Save actual + diff PNG to report dir
-      const reportActual = path.join(reportDir, filename.replace('.png', '-actual.png'));
+      // Save actual + diff to report dir
+      const reportActual = path.join(reportDir, `${result.checkpoint}-${result.viewport}-actual${ext}`);
       fs.copyFileSync(result.actualPath, reportActual);
 
       updated.push({

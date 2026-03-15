@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { createCodec } from '../codec/index.js';
 import { loadConfig } from '../config/loader.js';
 import type { LoadedConfig } from '../config/schema.js';
 import { ValidationError, validate } from '../config/validator.js';
@@ -75,7 +76,10 @@ export async function runRun(opts: RunOptions): Promise<number> {
   console.log(`Base URL: ${url}`);
   console.log('');
 
-  // 5. Prepare directories
+  // 5. Create image codec
+  const codec = createCodec(config.config.defaults.format);
+
+  // 6. Prepare directories
   const commitHash = getCommitHash(repo);
   const reportDirName = commitHash !== 'unknown' ? commitHash : `run-${Date.now()}`;
   const actualsDir = path.join(megatestDir, 'actuals');
@@ -96,6 +100,7 @@ export async function runRun(opts: RunOptions): Promise<number> {
       baseUrl: url,
       workflowNames,
       actualsDir,
+      codec,
     });
   } catch (err: any) {
     console.error(`Browser error: ${err.message}`);
@@ -109,6 +114,7 @@ export async function runRun(opts: RunOptions): Promise<number> {
     actualsDir,
     reportDir,
     threshold: config.config.defaults.threshold,
+    codec,
   });
 
   // 8. Build RunResult
@@ -124,7 +130,7 @@ export async function runRun(opts: RunOptions): Promise<number> {
   };
 
   // 9. Generate HTML report
-  const reportPath = generateHtmlReport(runResult, reportDir, baselinesDir);
+  const reportPath = generateHtmlReport(runResult, reportDir, baselinesDir, codec.extension);
   console.log(`\nReport: ${reportPath}`);
 
   // 10. Print summary

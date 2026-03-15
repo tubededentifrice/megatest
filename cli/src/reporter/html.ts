@@ -73,22 +73,22 @@ function checkpointModifier(status: string): string {
   }
 }
 
-function getImagePath(cp: CheckpointResult, type: 'actual' | 'diff' | 'baseline'): string {
+function getImagePath(cp: CheckpointResult, type: 'actual' | 'diff' | 'baseline', ext: string): string {
   const slug = `${cp.checkpoint}-${cp.viewport}`;
   switch (type) {
     case 'actual':
-      return `${slug}-actual.png`;
+      return `${slug}-actual${ext}`;
     case 'diff':
-      return `${slug}-diff.png`;
+      return `${slug}-diff${ext}`;
     case 'baseline':
-      return `../../baselines/${slug}.png`;
+      return `../../baselines/${slug}${ext}`;
   }
 }
 
-function renderFailedCheckpoint(cp: CheckpointResult): string {
-  const baselineSrc = getImagePath(cp, 'baseline');
-  const actualSrc = getImagePath(cp, 'actual');
-  const diffSrc = getImagePath(cp, 'diff');
+function renderFailedCheckpoint(cp: CheckpointResult, ext: string): string {
+  const baselineSrc = getImagePath(cp, 'baseline', ext);
+  const actualSrc = getImagePath(cp, 'actual', ext);
+  const diffSrc = getImagePath(cp, 'diff', ext);
   const diffText = cp.diffPercent !== null ? `${cp.diffPercent.toFixed(2)}% diff` : 'N/A';
   const pixelText = cp.diffPixels !== null ? `${formatNumber(cp.diffPixels)} changed px` : '';
 
@@ -127,8 +127,8 @@ function renderFailedCheckpoint(cp: CheckpointResult): string {
         </div>`;
 }
 
-function renderNewCheckpoint(cp: CheckpointResult): string {
-  const actualSrc = getImagePath(cp, 'actual');
+function renderNewCheckpoint(cp: CheckpointResult, ext: string): string {
+  const actualSrc = getImagePath(cp, 'actual', ext);
 
   return `
         <div class="checkpoint ${checkpointModifier(cp.status)}" data-status="${cp.status}">
@@ -173,9 +173,9 @@ function renderErrorCheckpoint(cp: CheckpointResult): string {
         </div>`;
 }
 
-function renderPassedRow(cp: CheckpointResult): string {
+function renderPassedRow(cp: CheckpointResult, ext: string): string {
   const diffText = formatDiffPercent(cp.diffPercent);
-  const baselineSrc = getImagePath(cp, 'baseline');
+  const baselineSrc = getImagePath(cp, 'baseline', ext);
   const rowId = `passed-${escapeHtml(cp.workflow)}-${escapeHtml(cp.checkpoint)}-${escapeHtml(cp.viewport)}`;
   return `
             <div class="checkpoint" style="border:none;border-radius:0;border-bottom:1px solid var(--c-border)">
@@ -471,7 +471,12 @@ img { max-width: 100%; display: block; }
 }
 `;
 
-export function generateHtmlReport(result: RunResult, reportDir: string, _baselinesDir: string): string {
+export function generateHtmlReport(
+  result: RunResult,
+  reportDir: string,
+  _baselinesDir: string,
+  extension = '.png',
+): string {
   const failed = result.checkpoints.filter((cp) => cp.status === 'fail');
   const newCps = result.checkpoints.filter((cp) => cp.status === 'new');
   const errorCps = result.checkpoints.filter((cp) => cp.status === 'error');
@@ -484,15 +489,15 @@ export function generateHtmlReport(result: RunResult, reportDir: string, _baseli
       if (cp.status === 'error') {
         return renderErrorCheckpoint(cp);
       }
-      return renderFailedCheckpoint(cp);
+      return renderFailedCheckpoint(cp, extension);
     })
     .join('\n');
 
   // Build new checkpoints HTML
-  const newHtml = newCps.map((cp) => renderNewCheckpoint(cp)).join('\n');
+  const newHtml = newCps.map((cp) => renderNewCheckpoint(cp, extension)).join('\n');
 
   // Build passed checkpoints HTML
-  const passedRows = passed.map((cp) => renderPassedRow(cp)).join('\n');
+  const passedRows = passed.map((cp) => renderPassedRow(cp, extension)).join('\n');
 
   const passedSection =
     passed.length > 0
