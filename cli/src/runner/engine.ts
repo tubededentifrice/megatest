@@ -193,7 +193,7 @@ export async function runEngine(opts: EngineOptions): Promise<CheckpointResult[]
               hasExplicitScroll = false;
             }
 
-            if (result.checkpointName) {
+            if (result.checkpointName && result.screenshotPath) {
               results.push({
                 workflow: workflowName,
                 checkpoint: result.checkpointName,
@@ -204,7 +204,7 @@ export async function runEngine(opts: EngineOptions): Promise<CheckpointResult[]
                 totalPixels: null,
                 dimensionMismatch: false,
                 baselinePath: null,
-                actualPath: result.screenshotPath!,
+                actualPath: result.screenshotPath,
                 diffPath: null,
                 error: null,
               });
