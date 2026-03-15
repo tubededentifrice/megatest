@@ -107,19 +107,19 @@ function renderFailedCheckpoint(cp: CheckpointResult): string {
             <div class="checkpoint__image-slot">
               <div class="checkpoint__image-label">Baseline</div>
               <div class="checkpoint__image-wrap">
-                <img src="${escapeHtml(baselineSrc)}" alt="Baseline">
+                <img src="${escapeHtml(baselineSrc)}" alt="Baseline" onclick="openLightbox(this.src, 'Baseline')" class="lightbox-trigger">
               </div>
             </div>
             <div class="checkpoint__image-slot">
               <div class="checkpoint__image-label">Actual</div>
               <div class="checkpoint__image-wrap">
-                <img src="${escapeHtml(actualSrc)}" alt="Actual">
+                <img src="${escapeHtml(actualSrc)}" alt="Actual" onclick="openLightbox(this.src, 'Actual')" class="lightbox-trigger">
               </div>
             </div>
             <div class="checkpoint__image-slot">
               <div class="checkpoint__image-label">Diff</div>
               <div class="checkpoint__image-wrap">
-                <img src="${escapeHtml(diffSrc)}" alt="Diff">
+                <img src="${escapeHtml(diffSrc)}" alt="Diff" onclick="openLightbox(this.src, 'Diff')" class="lightbox-trigger">
               </div>
             </div>
           </div>
@@ -144,7 +144,7 @@ function renderNewCheckpoint(cp: CheckpointResult): string {
             <div class="checkpoint__image-slot">
               <div class="checkpoint__image-label">Actual</div>
               <div class="checkpoint__image-wrap">
-                <img src="${escapeHtml(actualSrc)}" alt="Actual">
+                <img src="${escapeHtml(actualSrc)}" alt="Actual" onclick="openLightbox(this.src, 'Actual')" class="lightbox-trigger">
               </div>
             </div>
             <div class="checkpoint__image-slot" style="display:flex;align-items:center;justify-content:center">
@@ -175,14 +175,27 @@ function renderErrorCheckpoint(cp: CheckpointResult): string {
 
 function renderPassedRow(cp: CheckpointResult): string {
   const diffText = formatDiffPercent(cp.diffPercent);
+  const baselineSrc = getImagePath(cp, 'baseline');
+  const rowId = `passed-${escapeHtml(cp.workflow)}-${escapeHtml(cp.checkpoint)}-${escapeHtml(cp.viewport)}`;
   return `
             <div class="checkpoint" style="border:none;border-radius:0;border-bottom:1px solid var(--c-border)">
-              <div class="checkpoint__header">
+              <div class="checkpoint__header passed-row-toggle" onclick="togglePassedRow('${rowId}')" style="cursor:pointer">
                 <span class="dot dot--pass"></span>
                 <span class="checkpoint__title" style="font-size:var(--fs-sm)">${escapeHtml(cp.workflow)} &mdash; ${escapeHtml(cp.checkpoint)}</span>
                 <div class="checkpoint__meta">
                   <span class="mono">${escapeHtml(cp.viewport)}</span>
                   <span style="color:var(--c-pass)">${diffText} diff</span>
+                  <span class="text-xs muted passed-row-arrow" id="${rowId}-arrow">&#9654;</span>
+                </div>
+              </div>
+              <div class="passed-row__body" id="${rowId}">
+                <div class="checkpoint__images checkpoint__images--one">
+                  <div class="checkpoint__image-slot">
+                    <div class="checkpoint__image-label">Baseline</div>
+                    <div class="checkpoint__image-wrap">
+                      <img src="${escapeHtml(baselineSrc)}" alt="Baseline" onclick="openLightbox(this.src, 'Baseline')" class="lightbox-trigger">
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>`;
@@ -399,6 +412,44 @@ img { max-width: 100%; display: block; }
 .passed-section__body { display: none; }
 .passed-section__body.expanded { display: block; }
 .passed-toggle { cursor: pointer; user-select: none; }
+
+/* --- Passed row expand ------------------------------------ */
+.passed-row__body { display: none; }
+.passed-row__body.expanded { display: block; }
+.passed-row-toggle:hover { background: rgba(255,255,255,.03); }
+.passed-row-arrow { transition: transform .15s; display: inline-block; font-size: 10px; }
+.passed-row-arrow.expanded { transform: rotate(90deg); }
+
+.checkpoint__images--one { grid-template-columns: 1fr; }
+
+/* --- Lightbox --------------------------------------------- */
+.lightbox-trigger { cursor: pointer; transition: opacity .15s; }
+.lightbox-trigger:hover { opacity: .85; }
+
+.lightbox-overlay {
+  display: none; position: fixed; inset: 0; z-index: 100;
+  background: rgba(0,0,0,.92);
+  align-items: center; justify-content: center;
+  flex-direction: column; gap: var(--sp-md);
+  cursor: pointer;
+}
+.lightbox-overlay.open { display: flex; }
+.lightbox-overlay img {
+  max-width: 95vw; max-height: 88vh;
+  border-radius: var(--r-md);
+  box-shadow: 0 4px 40px rgba(0,0,0,.6);
+  object-fit: contain;
+}
+.lightbox-label {
+  font-size: var(--fs-sm); color: var(--c-muted);
+  text-transform: uppercase; letter-spacing: .04em;
+}
+.lightbox-close {
+  position: absolute; top: var(--sp-md); right: var(--sp-lg);
+  font-size: 28px; color: var(--c-muted); cursor: pointer;
+  background: none; border: none; line-height: 1;
+}
+.lightbox-close:hover { color: var(--c-text); }
 `;
 
 export function generateHtmlReport(result: RunResult, reportDir: string, _baselinesDir: string): string {
@@ -505,6 +556,13 @@ ${passedSection}
   </div>
 </div>
 
+<!-- Lightbox overlay -->
+<div class="lightbox-overlay" id="lightbox" onclick="closeLightbox(event)">
+  <button class="lightbox-close" onclick="closeLightbox(event)">&times;</button>
+  <img id="lightbox-img" src="" alt="">
+  <div class="lightbox-label" id="lightbox-label"></div>
+</div>
+
 <script>
 function setFilter(status) {
   // Update active chip
@@ -537,6 +595,40 @@ function togglePassed() {
     label.textContent = 'Click to collapse';
   }
 }
+
+function togglePassedRow(id) {
+  var body = document.getElementById(id);
+  var arrow = document.getElementById(id + '-arrow');
+  if (body.classList.contains('expanded')) {
+    body.classList.remove('expanded');
+    arrow.classList.remove('expanded');
+  } else {
+    body.classList.add('expanded');
+    arrow.classList.add('expanded');
+  }
+}
+
+function openLightbox(src, label) {
+  var overlay = document.getElementById('lightbox');
+  var img = document.getElementById('lightbox-img');
+  var lbl = document.getElementById('lightbox-label');
+  img.src = src;
+  lbl.textContent = label;
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeLightbox(e) {
+  // Don't close when clicking the image itself
+  if (e && e.target && e.target.id === 'lightbox-img') return;
+  var overlay = document.getElementById('lightbox');
+  overlay.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeLightbox(null);
+});
 </script>
 
 </body>
