@@ -4,6 +4,7 @@ import { LoadedConfig, Step, Workflow, Include } from '../config/schema.js';
 import { CheckpointResult } from '../types.js';
 import { launchBrowser, createContext, createPage } from './browser.js';
 import { executeStep, StepContext } from './steps.js';
+import { printProgress, printStepComplete, printStepError } from '../reporter/console.js';
 
 export interface EngineOptions {
   config: LoadedConfig;
@@ -100,8 +101,10 @@ export async function runEngine(opts: EngineOptions): Promise<CheckpointResult[]
           waitAfterNavigation: config.config.defaults.waitAfterNavigation,
         };
 
+        let stepFailed = false;
         for (let i = 0; i < resolvedSteps.length; i++) {
           const step = resolvedSteps[i];
+          printProgress(workflowName, vpName, i + 1, resolvedSteps.length);
           try {
             const result = await executeStep(page, step, stepCtx);
             if (result.checkpointName) {
@@ -122,7 +125,7 @@ export async function runEngine(opts: EngineOptions): Promise<CheckpointResult[]
             }
           } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
-            console.error(`  Step ${i + 1} failed in ${workflowName}/${vpName}: ${message}`);
+            printStepError(workflowName, vpName, message);
             results.push({
               workflow: workflowName,
               checkpoint: `step-${i + 1}-error`,
@@ -137,10 +140,14 @@ export async function runEngine(opts: EngineOptions): Promise<CheckpointResult[]
               diffPath: null,
               error: `Step ${i + 1} failed: ${message}`,
             });
+            stepFailed = true;
             break; // Skip remaining steps in this workflow/viewport pair
           }
         }
 
+        if (!stepFailed) {
+          printStepComplete(workflowName, vpName);
+        }
         await context.close();
       }
     }

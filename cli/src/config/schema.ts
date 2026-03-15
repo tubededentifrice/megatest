@@ -31,7 +31,7 @@ export interface OpenStep { open: string; }
 export interface WaitStep { wait: number; }
 export interface ScreenshotStep { screenshot: string; }
 export interface ClickStep { click: Locator & { name?: string }; }
-export interface FillStep { fill: Locator & { text: string }; }
+export interface FillStep { fill: Locator & { value: string }; }
 export interface HoverStep { hover: Locator; }
 export interface SelectStep { select: Locator & { value: string }; }
 export interface PressStep { press: string; }

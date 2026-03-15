@@ -26,12 +26,19 @@ export function getBranchName(repoPath: string): string {
 
 export function ensureGitignore(megatestDir: string): void {
   const gitignorePath = path.join(megatestDir, '.gitignore');
-  const content = `# Megatest generated files
-reports/
-actuals/
-`;
+  const requiredEntries = ['reports/', 'actuals/'];
+
   if (!fs.existsSync(gitignorePath)) {
+    const content = `# Megatest generated files\n${requiredEntries.join('\n')}\n`;
     fs.writeFileSync(gitignorePath, content);
+    return;
+  }
+
+  const existing = fs.readFileSync(gitignorePath, 'utf-8');
+  const missing = requiredEntries.filter(entry => !existing.split('\n').some(line => line.trim() === entry));
+  if (missing.length > 0) {
+    const suffix = (existing.endsWith('\n') ? '' : '\n') + missing.join('\n') + '\n';
+    fs.appendFileSync(gitignorePath, suffix);
   }
 }
 

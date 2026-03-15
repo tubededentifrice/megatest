@@ -86,9 +86,10 @@ export async function runRun(opts: RunOptions): Promise<number> {
 
   // 5. Prepare directories
   const commitHash = getCommitHash(repo);
+  const reportDirName = commitHash !== 'unknown' ? commitHash : `run-${Date.now()}`;
   const actualsDir = path.join(megatestDir, 'actuals');
   const baselinesDir = path.join(megatestDir, 'baselines');
-  const reportDir = path.join(megatestDir, 'reports', commitHash);
+  const reportDir = path.join(megatestDir, 'reports', reportDirName);
 
   fs.mkdirSync(actualsDir, { recursive: true });
   fs.mkdirSync(baselinesDir, { recursive: true });

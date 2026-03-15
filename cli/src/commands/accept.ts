@@ -23,11 +23,13 @@ export async function runAccept(repoPath: string, checkpoint?: string): Promise<
   let toAccept = files;
   if (checkpoint) {
     // Checkpoint files are named <checkpoint>-<viewport>.png
+    // Extract checkpoint by removing the last -<segment> (viewport name) from the filename
     toAccept = files.filter(f => {
-      // Match files that start with the checkpoint name followed by a dash and viewport
       const withoutExt = f.replace('.png', '');
-      // The checkpoint name is everything before the last dash-separated viewport name
-      return withoutExt === checkpoint || withoutExt.startsWith(checkpoint + '-');
+      const lastDash = withoutExt.lastIndexOf('-');
+      if (lastDash === -1) return withoutExt === checkpoint;
+      const cpName = withoutExt.substring(0, lastDash);
+      return cpName === checkpoint;
     });
 
     if (toAccept.length === 0) {

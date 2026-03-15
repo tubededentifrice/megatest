@@ -10,6 +10,75 @@ export interface ValidationError {
 
 const VALID_FILENAME_PATTERN = /^[a-z0-9-]+\.yml$/;
 
+const VALID_STEP_TYPES = new Set([
+  'open', 'wait', 'screenshot', 'click', 'fill', 'hover',
+  'select', 'press', 'scroll', 'eval', 'include', 'set-viewport',
+]);
+
+/**
+ * Validates that a step has exactly one recognized key and appropriate value type.
+ */
+function validateStep(step: Step, file: string, viewportNames: Set<string>): ValidationError[] {
+  const errors: ValidationError[] = [];
+  const keys = Object.keys(step);
+
+  if (keys.length === 0) {
+    errors.push({ file, message: 'Step has no keys', severity: 'error' });
+    return errors;
+  }
+
+  const stepType = keys[0];
+  if (!VALID_STEP_TYPES.has(stepType)) {
+    errors.push({
+      file,
+      message: `Unknown step type "${stepType}". Valid types: ${[...VALID_STEP_TYPES].join(', ')}`,
+      severity: 'error',
+    });
+    return errors;
+  }
+
+  const value = (step as unknown as Record<string, unknown>)[stepType];
+
+  switch (stepType) {
+    case 'open':
+    case 'screenshot':
+    case 'press':
+    case 'eval':
+    case 'include':
+      if (typeof value !== 'string') {
+        errors.push({ file, message: `Step "${stepType}" requires a string value`, severity: 'error' });
+      }
+      break;
+    case 'wait':
+      if (typeof value !== 'number') {
+        errors.push({ file, message: `Step "wait" requires a number value (milliseconds)`, severity: 'error' });
+      }
+      break;
+    case 'set-viewport':
+      if (typeof value !== 'string') {
+        errors.push({ file, message: `Step "set-viewport" requires a string value`, severity: 'error' });
+      } else if (!viewportNames.has(value)) {
+        errors.push({
+          file,
+          message: `Step "set-viewport" references unknown viewport "${value}". Available: ${[...viewportNames].join(', ')}`,
+          severity: 'error',
+        });
+      }
+      break;
+    case 'click':
+    case 'hover':
+    case 'fill':
+    case 'select':
+    case 'scroll':
+      if (typeof value !== 'object' || value === null) {
+        errors.push({ file, message: `Step "${stepType}" requires an object value`, severity: 'error' });
+      }
+      break;
+  }
+
+  return errors;
+}
+
 /**
  * Extracts all include references from a list of steps.
  */
@@ -150,6 +219,12 @@ export function validate(config: LoadedConfig): ValidationError[] {
         });
       }
     }
+
+    // Validate individual steps
+    const viewportNameSet = new Set(Object.keys(config.config.viewports));
+    for (const step of workflow.steps) {
+      errors.push(...validateStep(step, filePath, viewportNameSet));
+    }
   }
 
   // Validate include filenames and contents
@@ -215,6 +290,12 @@ export function validate(config: LoadedConfig): ValidationError[] {
           severity: 'error',
         });
       }
+    }
+
+    // Validate individual steps
+    const viewportNameSet = new Set(Object.keys(config.config.viewports));
+    for (const step of include.steps) {
+      errors.push(...validateStep(step, filePath, viewportNameSet));
     }
   }
 

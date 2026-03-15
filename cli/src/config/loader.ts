@@ -57,8 +57,8 @@ function applyConfigDefaults(raw: Record<string, unknown>): MegatestConfig {
       threshold:
         (rawDefaults.threshold as number) ?? DEFAULT_CONFIG.defaults.threshold,
       waitAfterNavigation:
-        (rawDefaults.waitAfterNavigation as string) ??
-        DEFAULT_CONFIG.defaults.waitAfterNavigation,
+        String((rawDefaults.waitAfterNavigation as string | number) ??
+        DEFAULT_CONFIG.defaults.waitAfterNavigation),
       screenshotMode:
         (rawDefaults.screenshotMode as 'viewport' | 'full') ??
         DEFAULT_CONFIG.defaults.screenshotMode,
@@ -87,7 +87,7 @@ export function loadConfig(repoPath: string): LoadedConfig {
     const rawConfig = loadYamlFile(configPath) as Record<string, unknown> | null;
     config = applyConfigDefaults(rawConfig ?? {});
   } else {
-    config = { ...DEFAULT_CONFIG };
+    config = structuredClone(DEFAULT_CONFIG);
   }
 
   // Load workflows
@@ -95,13 +95,16 @@ export function loadConfig(repoPath: string): LoadedConfig {
   const workflowsDir = path.join(basePath, 'workflows');
   for (const filePath of listYmlFiles(workflowsDir)) {
     const raw = loadYamlFile(filePath) as Workflow;
-    if (raw && raw.name) {
-      workflows.set(raw.name, {
-        name: raw.name,
-        description: raw.description,
-        steps: raw.steps ?? [],
-      });
+    if (!raw || !raw.name) {
+      const filename = path.basename(filePath);
+      console.warn(`Warning: ${filename} has no "name" field, skipping`);
+      continue;
     }
+    workflows.set(raw.name, {
+      name: raw.name,
+      description: raw.description,
+      steps: raw.steps ?? [],
+    });
   }
 
   // Load includes
@@ -109,13 +112,16 @@ export function loadConfig(repoPath: string): LoadedConfig {
   const includesDir = path.join(basePath, 'includes');
   for (const filePath of listYmlFiles(includesDir)) {
     const raw = loadYamlFile(filePath) as Include;
-    if (raw && raw.name) {
-      includes.set(raw.name, {
-        name: raw.name,
-        description: raw.description,
-        steps: raw.steps ?? [],
-      });
+    if (!raw || !raw.name) {
+      const filename = path.basename(filePath);
+      console.warn(`Warning: ${filename} has no "name" field, skipping`);
+      continue;
     }
+    includes.set(raw.name, {
+      name: raw.name,
+      description: raw.description,
+      steps: raw.steps ?? [],
+    });
   }
 
   // Load plans
@@ -123,13 +129,16 @@ export function loadConfig(repoPath: string): LoadedConfig {
   const plansDir = path.join(basePath, 'plans');
   for (const filePath of listYmlFiles(plansDir)) {
     const raw = loadYamlFile(filePath) as Plan;
-    if (raw && raw.name) {
-      plans.set(raw.name, {
-        name: raw.name,
-        description: raw.description,
-        workflows: raw.workflows ?? [],
-      });
+    if (!raw || !raw.name) {
+      const filename = path.basename(filePath);
+      console.warn(`Warning: ${filename} has no "name" field, skipping`);
+      continue;
     }
+    plans.set(raw.name, {
+      name: raw.name,
+      description: raw.description,
+      workflows: raw.workflows ?? [],
+    });
   }
 
   return {

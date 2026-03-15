@@ -69,8 +69,8 @@ export async function executeStep(page: Page, step: Step, ctx: StepContext): Pro
 
     case 'fill': {
       const fillData = (step as unknown as { fill: Record<string, unknown> }).fill;
-      const { text, ...loc } = fillData;
-      await resolveLocator(page, loc).fill(text as string, { timeout });
+      const { value, ...loc } = fillData;
+      await resolveLocator(page, loc).fill(value as string, { timeout });
       return {};
     }
 
