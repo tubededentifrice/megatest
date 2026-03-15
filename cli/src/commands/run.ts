@@ -3,7 +3,6 @@ import * as path from 'node:path';
 import { loadConfig } from '../config/loader.js';
 import type { LoadedConfig } from '../config/schema.js';
 import { ValidationError, validate } from '../config/validator.js';
-import { interpolateWorkflow } from '../config/variables.js';
 import { runDiffPipeline } from '../differ/pipeline.js';
 import { printSummary } from '../reporter/console.js';
 import { generateHtmlReport } from '../reporter/html.js';
@@ -49,17 +48,7 @@ export async function runRun(opts: RunOptions): Promise<number> {
     return 1;
   }
 
-  // 3. Interpolate variables in all workflows
-  const variables = config.config.variables;
-  for (const [name, workflow] of config.workflows) {
-    const { workflow: interpolated, warnings } = interpolateWorkflow(workflow, variables);
-    config.workflows.set(name, interpolated);
-    for (const w of warnings) {
-      console.warn(`  \u26A0 ${name}: ${w}`);
-    }
-  }
-
-  // 4. Determine workflow list
+  // 3. Determine workflow list (variable interpolation happens in the engine after include resolution)
   let workflowNames: string[];
   if (opts.workflow) {
     if (!config.workflows.has(opts.workflow)) {

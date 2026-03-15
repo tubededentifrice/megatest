@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { type Include, type LoadedConfig, type Step, Workflow } from '../config/schema.js';
+import { interpolateStep } from '../config/variables.js';
 import { printProgress, printStepComplete, printStepError } from '../reporter/console.js';
 import type { CheckpointResult } from '../types.js';
 import { createContext, createPage, launchBrowser } from './browser.js';
@@ -78,10 +79,18 @@ export async function runEngine(opts: EngineOptions): Promise<CheckpointResult[]
         continue;
       }
 
-      // Resolve includes
+      // Resolve includes, then interpolate variables (includes may contain ${VAR} references)
       let resolvedSteps: Step[];
       try {
         resolvedSteps = resolveIncludes(workflow.steps, config.includes);
+        const variables = config.config.variables;
+        resolvedSteps = resolvedSteps.map((step) => {
+          const { step: interpolated, warnings } = interpolateStep(step, variables);
+          for (const w of warnings) {
+            console.warn(`  \u26A0 ${workflowName}: ${w}`);
+          }
+          return interpolated;
+        });
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         console.error(`Error resolving includes for workflow "${workflowName}": ${message}`);
