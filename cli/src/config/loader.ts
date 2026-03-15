@@ -11,7 +11,7 @@ const DEFAULT_CONFIG: MegatestConfig = {
     waitAfterNavigation: '1000',
     screenshotMode: 'viewport',
     timeout: 30000,
-    format: 'png',
+    format: 'webp',
   },
   viewports: {
     desktop: { width: 1280, height: 720 },
