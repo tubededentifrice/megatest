@@ -18,7 +18,22 @@ npm run build
 npx playwright install chromium
 ```
 
-### 2. Create a `.megatest/` config in your project
+### 2. Set up Claude Code (for the `/megatest` skill)
+
+Install [Claude Code](https://docs.anthropic.com/en/docs/claude-code) if you haven't already, then add the Playwright MCP server globally so the `/megatest` skill can browse your live site:
+
+```bash
+claude mcp add -s user playwright -- npx @playwright/mcp@latest
+```
+
+Then launch Claude Code from the megatest directory:
+
+```bash
+cd ~/git/megatest
+claude
+```
+
+### 3. Create a `.megatest/` config in your project
 
 Either write it by hand (see [Config Format](#config-format) below) or use the Claude Code skill:
 
@@ -26,7 +41,7 @@ Either write it by hand (see [Config Format](#config-format) below) or use the C
 /megatest ../my-project http://localhost:3000
 ```
 
-### 3. Run tests
+### 4. Run tests
 
 ```bash
 node ~/git/megatest/cli/bin/megatest.js run --repo ../my-project --url http://localhost:3000
@@ -34,7 +49,7 @@ node ~/git/megatest/cli/bin/megatest.js run --repo ../my-project --url http://lo
 
 First run: all screenshots are "new" (no baselines yet). A report is generated at `.megatest/reports/<commit>/index.html`.
 
-### 4. Accept baselines
+### 5. Accept baselines
 
 ```bash
 node ~/git/megatest/cli/bin/megatest.js accept --repo ../my-project
@@ -42,7 +57,7 @@ node ~/git/megatest/cli/bin/megatest.js accept --repo ../my-project
 
 This promotes the current screenshots to baselines. Commit the `baselines/` directory.
 
-### 5. Run again after changes
+### 6. Run again after changes
 
 ```bash
 node ~/git/megatest/cli/bin/megatest.js run --repo ../my-project --url http://localhost:3000
@@ -300,7 +315,15 @@ hero-section-mobile.png
 
 ## Claude Code Skill
 
-If you use [Claude Code](https://claude.com/claude-code), the `/megatest` skill auto-generates `.megatest/` config by browsing your live site with Playwright MCP.
+If you use [Claude Code](https://docs.anthropic.com/en/docs/claude-code), the `/megatest` skill auto-generates `.megatest/` config by browsing your live site with Playwright MCP.
+
+**Prerequisite:** Add the Playwright MCP server globally (one-time setup):
+
+```bash
+claude mcp add -s user playwright -- npx @playwright/mcp@latest
+```
+
+Then from within a Claude Code session:
 
 ```
 /megatest ../my-project http://localhost:3000
