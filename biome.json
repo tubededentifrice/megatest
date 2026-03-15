@@ -2,7 +2,7 @@
   "$schema": "https://biomejs.dev/schemas/1.9.0/schema.json",
   "organizeImports": { "enabled": true },
   "files": {
-    "include": ["cli/src/**/*.ts"],
+    "include": ["cli/src/**/*.ts", "src/**/*.ts"],
     "ignore": ["cli/dist", "cli/node_modules", "node_modules", "mocks"]
   },
   "formatter": {
