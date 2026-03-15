@@ -6,47 +6,47 @@ const program = new Command();
 program.name('megatest').description('Visual regression testing CLI').version('0.1.0');
 
 program
-  .command('validate')
-  .description('Validate .megatest/ configuration')
-  .requiredOption('--repo <path>', 'Path to target repository')
-  .action(async (opts) => {
-    const code = await runValidate(opts.repo);
-    process.exit(code);
-  });
+    .command('validate')
+    .description('Validate .megatest/ configuration')
+    .requiredOption('--repo <path>', 'Path to target repository')
+    .action(async (opts) => {
+        const code = await runValidate(opts.repo);
+        process.exit(code);
+    });
 
 program
-  .command('run')
-  .description('Run visual regression tests')
-  .requiredOption('--repo <path>', 'Path to target repository')
-  .requiredOption('--url <url>', 'Base URL of the running application')
-  .option('--plan <name>', 'Plan to execute')
-  .option('--workflow <name>', 'Single workflow to execute')
-  .action(async (opts) => {
-    const { runRun } = await import('./commands/run.js');
-    const code = await runRun(opts);
-    process.exit(code);
-  });
+    .command('run')
+    .description('Run visual regression tests')
+    .requiredOption('--repo <path>', 'Path to target repository')
+    .requiredOption('--url <url>', 'Base URL of the running application')
+    .option('--plan <name>', 'Plan to execute')
+    .option('--workflow <name>', 'Single workflow to execute')
+    .action(async (opts) => {
+        const { runRun } = await import('./commands/run.js');
+        const code = await runRun(opts);
+        process.exit(code);
+    });
 
 program
-  .command('accept')
-  .description('Accept screenshots as new baselines')
-  .argument('[checkpoint]', 'Specific checkpoint to accept (all viewports)')
-  .requiredOption('--repo <path>', 'Path to target repository')
-  .action(async (checkpoint, opts) => {
-    const { runAccept } = await import('./commands/accept.js');
-    const code = await runAccept(opts.repo, checkpoint);
-    process.exit(code);
-  });
+    .command('accept')
+    .description('Accept screenshots as new baselines')
+    .argument('[checkpoint]', 'Specific checkpoint to accept (all viewports)')
+    .requiredOption('--repo <path>', 'Path to target repository')
+    .action(async (checkpoint, opts) => {
+        const { runAccept } = await import('./commands/accept.js');
+        const code = await runAccept(opts.repo, checkpoint);
+        process.exit(code);
+    });
 
 program
-  .command('serve')
-  .description('Start a report server dashboard')
-  .option('--config <path>', 'Path to serve config file', 'serve.config.yml')
-  .option('--port <number>', 'Port to listen on (overrides config)')
-  .option('--host <address>', 'Host to bind to (overrides config)')
-  .action(async (opts) => {
-    const { runServe } = await import('./commands/serve.js');
-    await runServe(opts);
-  });
+    .command('serve')
+    .description('Start a report server dashboard')
+    .option('--config <path>', 'Path to serve config file', 'serve.config.yml')
+    .option('--port <number>', 'Port to listen on (overrides config)')
+    .option('--host <address>', 'Host to bind to (overrides config)')
+    .action(async (opts) => {
+        const { runServe } = await import('./commands/serve.js');
+        await runServe(opts);
+    });
 
 program.parse();

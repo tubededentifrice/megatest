@@ -9,17 +9,17 @@ import type { ReportMeta, ServeConfig, ServeProjectConfig } from '../types.js';
 // ---------------------------------------------------------------------------
 
 interface DiscoveredProject {
-  name: string;
-  repoPath: string;
-  megatestDir: string;
-  reportsDir: string;
+    name: string;
+    repoPath: string;
+    megatestDir: string;
+    reportsDir: string;
 }
 
 interface ReportEntry {
-  commitHash: string;
-  meta: ReportMeta | null;
-  mtime: Date;
-  reportUrl: string;
+    commitHash: string;
+    meta: ReportMeta | null;
+    mtime: Date;
+    reportUrl: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -27,44 +27,44 @@ interface ReportEntry {
 // ---------------------------------------------------------------------------
 
 function loadConfig(configPath: string): ServeConfig {
-  if (!fs.existsSync(configPath)) {
-    console.error(`Config file not found: ${configPath}`);
-    console.error('Create one from serve.config.sample.yml');
-    process.exit(1);
-  }
-
-  const raw = fs.readFileSync(configPath, 'utf-8');
-  const doc = yaml.load(raw) as Record<string, unknown>;
-
-  if (!doc || typeof doc !== 'object') {
-    console.error(`Invalid config file: ${configPath}`);
-    process.exit(1);
-  }
-
-  const server = (doc.server as Record<string, unknown>) ?? {};
-  const projects = (doc.projects as Array<Record<string, unknown>>) ?? [];
-
-  if (!Array.isArray(projects) || projects.length === 0) {
-    console.error(`Config must have at least one project in 'projects' list`);
-    process.exit(1);
-  }
-
-  const parsed: ServeConfig = {
-    title: (doc.title as string) ?? 'Megatest Reports',
-    server: {
-      port: (server.port as number) ?? 3000,
-      host: (server.host as string) ?? '0.0.0.0',
-    },
-    projects: projects.map((p, i) => {
-      if (!p.name || !p.path) {
-        console.error(`Project at index ${i} must have 'name' and 'path'`);
+    if (!fs.existsSync(configPath)) {
+        console.error(`Config file not found: ${configPath}`);
+        console.error('Create one from serve.config.sample.yml');
         process.exit(1);
-      }
-      return { name: p.name as string, path: p.path as string };
-    }),
-  };
+    }
 
-  return parsed;
+    const raw = fs.readFileSync(configPath, 'utf-8');
+    const doc = yaml.load(raw) as Record<string, unknown>;
+
+    if (!doc || typeof doc !== 'object') {
+        console.error(`Invalid config file: ${configPath}`);
+        process.exit(1);
+    }
+
+    const server = (doc.server as Record<string, unknown>) ?? {};
+    const projects = (doc.projects as Array<Record<string, unknown>>) ?? [];
+
+    if (!Array.isArray(projects) || projects.length === 0) {
+        console.error(`Config must have at least one project in 'projects' list`);
+        process.exit(1);
+    }
+
+    const parsed: ServeConfig = {
+        title: (doc.title as string) ?? 'Megatest Reports',
+        server: {
+            port: (server.port as number) ?? 3000,
+            host: (server.host as string) ?? '0.0.0.0',
+        },
+        projects: projects.map((p, i) => {
+            if (!p.name || !p.path) {
+                console.error(`Project at index ${i} must have 'name' and 'path'`);
+                process.exit(1);
+            }
+            return { name: p.name as string, path: p.path as string };
+        }),
+    };
+
+    return parsed;
 }
 
 // ---------------------------------------------------------------------------
@@ -72,27 +72,27 @@ function loadConfig(configPath: string): ServeConfig {
 // ---------------------------------------------------------------------------
 
 function discoverProjects(projects: ServeProjectConfig[]): DiscoveredProject[] {
-  const discovered: DiscoveredProject[] = [];
+    const discovered: DiscoveredProject[] = [];
 
-  for (const proj of projects) {
-    const repoPath = path.resolve(proj.path);
-    const megatestDir = path.join(repoPath, '.megatest');
-    const reportsDir = path.join(megatestDir, 'reports');
+    for (const proj of projects) {
+        const repoPath = path.resolve(proj.path);
+        const megatestDir = path.join(repoPath, '.megatest');
+        const reportsDir = path.join(megatestDir, 'reports');
 
-    if (!fs.existsSync(reportsDir)) {
-      console.warn(`Warning: No .megatest/reports/ in ${repoPath} (project: ${proj.name})`);
-      continue;
+        if (!fs.existsSync(reportsDir)) {
+            console.warn(`Warning: No .megatest/reports/ in ${repoPath} (project: ${proj.name})`);
+            continue;
+        }
+
+        discovered.push({
+            name: proj.name,
+            repoPath,
+            megatestDir,
+            reportsDir,
+        });
     }
 
-    discovered.push({
-      name: proj.name,
-      repoPath,
-      megatestDir,
-      reportsDir,
-    });
-  }
-
-  return discovered;
+    return discovered;
 }
 
 // ---------------------------------------------------------------------------
@@ -100,52 +100,52 @@ function discoverProjects(projects: ServeProjectConfig[]): DiscoveredProject[] {
 // ---------------------------------------------------------------------------
 
 function listReports(project: DiscoveredProject): ReportEntry[] {
-  const entries: ReportEntry[] = [];
+    const entries: ReportEntry[] = [];
 
-  let dirs: string[];
-  try {
-    dirs = fs
-      .readdirSync(project.reportsDir, { withFileTypes: true })
-      .filter((d) => d.isDirectory())
-      .map((d) => d.name);
-  } catch {
-    return entries;
-  }
-
-  for (const dirName of dirs) {
-    const reportPath = path.join(project.reportsDir, dirName);
-    const indexPath = path.join(reportPath, 'index.html');
-
-    if (!fs.existsSync(indexPath)) continue;
-
-    let meta: ReportMeta | null = null;
-    const metaPath = path.join(reportPath, 'meta.json');
+    let dirs: string[];
     try {
-      if (fs.existsSync(metaPath)) {
-        meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8')) as ReportMeta;
-      }
+        dirs = fs
+            .readdirSync(project.reportsDir, { withFileTypes: true })
+            .filter((d) => d.isDirectory())
+            .map((d) => d.name);
     } catch {
-      // Ignore parse errors
+        return entries;
     }
 
-    const stat = fs.statSync(reportPath);
+    for (const dirName of dirs) {
+        const reportPath = path.join(project.reportsDir, dirName);
+        const indexPath = path.join(reportPath, 'index.html');
 
-    entries.push({
-      commitHash: dirName,
-      meta,
-      mtime: stat.mtime,
-      reportUrl: `/projects/${encodeURIComponent(project.name)}/reports/${encodeURIComponent(dirName)}/index.html`,
+        if (!fs.existsSync(indexPath)) continue;
+
+        let meta: ReportMeta | null = null;
+        const metaPath = path.join(reportPath, 'meta.json');
+        try {
+            if (fs.existsSync(metaPath)) {
+                meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8')) as ReportMeta;
+            }
+        } catch {
+            // Ignore parse errors
+        }
+
+        const stat = fs.statSync(reportPath);
+
+        entries.push({
+            commitHash: dirName,
+            meta,
+            mtime: stat.mtime,
+            reportUrl: `/projects/${encodeURIComponent(project.name)}/reports/${encodeURIComponent(dirName)}/index.html`,
+        });
+    }
+
+    // Sort newest first
+    entries.sort((a, b) => {
+        const timeA = a.meta ? new Date(a.meta.timestamp).getTime() : a.mtime.getTime();
+        const timeB = b.meta ? new Date(b.meta.timestamp).getTime() : b.mtime.getTime();
+        return timeB - timeA;
     });
-  }
 
-  // Sort newest first
-  entries.sort((a, b) => {
-    const timeA = a.meta ? new Date(a.meta.timestamp).getTime() : a.mtime.getTime();
-    const timeB = b.meta ? new Date(b.meta.timestamp).getTime() : b.mtime.getTime();
-    return timeB - timeA;
-  });
-
-  return entries;
+    return entries;
 }
 
 // ---------------------------------------------------------------------------
@@ -153,21 +153,21 @@ function listReports(project: DiscoveredProject): ReportEntry[] {
 // ---------------------------------------------------------------------------
 
 const MIME_TYPES: Record<string, string> = {
-  '.html': 'text/html; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.png': 'image/png',
-  '.webp': 'image/webp',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.svg': 'image/svg+xml',
-  '.gif': 'image/gif',
+    '.html': 'text/html; charset=utf-8',
+    '.css': 'text/css; charset=utf-8',
+    '.js': 'text/javascript; charset=utf-8',
+    '.json': 'application/json; charset=utf-8',
+    '.png': 'image/png',
+    '.webp': 'image/webp',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.svg': 'image/svg+xml',
+    '.gif': 'image/gif',
 };
 
 function getMimeType(filePath: string): string {
-  const ext = path.extname(filePath).toLowerCase();
-  return MIME_TYPES[ext] ?? 'application/octet-stream';
+    const ext = path.extname(filePath).toLowerCase();
+    return MIME_TYPES[ext] ?? 'application/octet-stream';
 }
 
 // ---------------------------------------------------------------------------
@@ -175,34 +175,34 @@ function getMimeType(filePath: string): string {
 // ---------------------------------------------------------------------------
 
 function escapeHtml(str: string): string {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 function formatDuration(ms: number): string {
-  const sec = ms / 1000;
-  if (sec < 60) return `${sec.toFixed(1)}s`;
-  const min = Math.floor(sec / 60);
-  const remSec = (sec % 60).toFixed(0);
-  return `${min}m ${remSec}s`;
+    const sec = ms / 1000;
+    if (sec < 60) return `${sec.toFixed(1)}s`;
+    const min = Math.floor(sec / 60);
+    const remSec = (sec % 60).toFixed(0);
+    return `${min}m ${remSec}s`;
 }
 
 function timeTag(dateStr: string): string {
-  return `<time data-ts="${escapeHtml(dateStr)}"></time>`;
+    return `<time data-ts="${escapeHtml(dateStr)}"></time>`;
 }
 
 function renderBadges(meta: ReportMeta): string {
-  const parts: string[] = [];
-  if (meta.passed > 0) parts.push(`<span class="badge badge--pass">${meta.passed} passed</span>`);
-  if (meta.failed > 0) parts.push(`<span class="badge badge--changed">${meta.failed} changed</span>`);
-  if (meta.newCount > 0) parts.push(`<span class="badge badge--new">${meta.newCount} new</span>`);
-  if (meta.errors > 0) parts.push(`<span class="badge badge--fail">${meta.errors} failed</span>`);
-  return parts.join(' ');
+    const parts: string[] = [];
+    if (meta.passed > 0) parts.push(`<span class="badge badge--pass">${meta.passed} passed</span>`);
+    if (meta.failed > 0) parts.push(`<span class="badge badge--changed">${meta.failed} changed</span>`);
+    if (meta.newCount > 0) parts.push(`<span class="badge badge--new">${meta.newCount} new</span>`);
+    if (meta.errors > 0) parts.push(`<span class="badge badge--fail">${meta.errors} failed</span>`);
+    return parts.join(' ');
 }
 
 function renderLatestReport(report: ReportEntry): string {
-  if (report.meta) {
-    const meta = report.meta;
-    return `
+    if (report.meta) {
+        const meta = report.meta;
+        return `
       <a href="${escapeHtml(report.reportUrl)}" class="latest-report">
         <div class="latest-report__header">
           <span class="mono" style="font-size:var(--fs-lg);font-weight:600">${escapeHtml(report.commitHash)}</span>
@@ -214,9 +214,9 @@ function renderLatestReport(report: ReportEntry): string {
           <span class="muted text-xs">${meta.totalCheckpoints} checkpoint${meta.totalCheckpoints !== 1 ? 's' : ''}</span>
         </div>
       </a>`;
-  }
+    }
 
-  return `
+    return `
     <a href="${escapeHtml(report.reportUrl)}" class="latest-report">
       <div class="latest-report__header">
         <span class="mono" style="font-size:var(--fs-lg);font-weight:600">${escapeHtml(report.commitHash)}</span>
@@ -226,10 +226,10 @@ function renderLatestReport(report: ReportEntry): string {
 }
 
 function renderOlderReport(report: ReportEntry): string {
-  const dateStr = report.meta ? timeTag(report.meta.timestamp) : timeTag(report.mtime.toISOString());
-  const badges = report.meta ? renderBadges(report.meta) : '';
+    const dateStr = report.meta ? timeTag(report.meta.timestamp) : timeTag(report.mtime.toISOString());
+    const badges = report.meta ? renderBadges(report.meta) : '';
 
-  return `
+    return `
     <a href="${escapeHtml(report.reportUrl)}" class="report-row">
       <span class="mono">${escapeHtml(report.commitHash)}</span>
       <span class="muted text-sm">${dateStr}</span>
@@ -238,12 +238,12 @@ function renderOlderReport(report: ReportEntry): string {
 }
 
 function renderDashboard(title: string, projects: DiscoveredProject[]): string {
-  const projectCards = projects
-    .map((project) => {
-      const reports = listReports(project);
+    const projectCards = projects
+        .map((project) => {
+            const reports = listReports(project);
 
-      if (reports.length === 0) {
-        return `
+            if (reports.length === 0) {
+                return `
         <div class="card">
           <div class="card__header">
             <h2>${escapeHtml(project.name)}</h2>
@@ -255,21 +255,21 @@ function renderDashboard(title: string, projects: DiscoveredProject[]): string {
             </div>
           </div>
         </div>`;
-      }
+            }
 
-      const [latest, ...older] = reports;
+            const [latest, ...older] = reports;
 
-      const olderHtml =
-        older.length > 0
-          ? `<div class="older-reports">
+            const olderHtml =
+                older.length > 0
+                    ? `<div class="older-reports">
           <div class="older-reports__header muted text-xs">
             ${older.length} older report${older.length !== 1 ? 's' : ''}
           </div>
           ${older.map((r) => renderOlderReport(r)).join('\n')}
         </div>`
-          : '';
+                    : '';
 
-      return `
+            return `
       <div class="card">
         <div class="card__header">
           <h2>${escapeHtml(project.name)}</h2>
@@ -281,17 +281,17 @@ function renderDashboard(title: string, projects: DiscoveredProject[]): string {
           ${olderHtml}
         </div>
       </div>`;
-    })
-    .join('\n');
+        })
+        .join('\n');
 
-  const noProjects =
-    projects.length === 0
-      ? `<div class="empty" style="padding:var(--sp-2xl)">
+    const noProjects =
+        projects.length === 0
+            ? `<div class="empty" style="padding:var(--sp-2xl)">
         <span class="muted">No projects found. Check your serve.config.yml</span>
       </div>`
-      : '';
+            : '';
 
-  return `<!DOCTYPE html>
+    return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -467,14 +467,14 @@ a:hover { text-decoration: underline; }
 // ---------------------------------------------------------------------------
 
 function serveFile(res: http.ServerResponse, filePath: string): void {
-  try {
-    const data = fs.readFileSync(filePath);
-    res.writeHead(200, { 'Content-Type': getMimeType(filePath) });
-    res.end(data);
-  } catch {
-    res.writeHead(404, { 'Content-Type': 'text/plain' });
-    res.end('Not Found');
-  }
+    try {
+        const data = fs.readFileSync(filePath);
+        res.writeHead(200, { 'Content-Type': getMimeType(filePath) });
+        res.end(data);
+    } catch {
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.end('Not Found');
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -482,58 +482,58 @@ function serveFile(res: http.ServerResponse, filePath: string): void {
 // ---------------------------------------------------------------------------
 
 function createHandler(config: ServeConfig) {
-  // Build project lookup from config (not discovery) so it includes all configured projects
-  const configMap = new Map<string, ServeProjectConfig>();
-  for (const p of config.projects) {
-    configMap.set(p.name, p);
-  }
-
-  return (req: http.IncomingMessage, res: http.ServerResponse) => {
-    const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
-    const pathname = decodeURIComponent(url.pathname);
-
-    // Dashboard
-    if (pathname === '/' || pathname === '') {
-      // Re-discover on each request so new reports appear on refresh
-      const freshProjects = discoverProjects(config.projects);
-      const html = renderDashboard(config.title, freshProjects);
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end(html);
-      return;
+    // Build project lookup from config (not discovery) so it includes all configured projects
+    const configMap = new Map<string, ServeProjectConfig>();
+    for (const p of config.projects) {
+        configMap.set(p.name, p);
     }
 
-    // Static file serving: /projects/<name>/...
-    const match = pathname.match(/^\/projects\/([^/]+)\/(.+)$/);
-    if (!match) {
-      res.writeHead(404, { 'Content-Type': 'text/plain' });
-      res.end('Not Found');
-      return;
-    }
+    return (req: http.IncomingMessage, res: http.ServerResponse) => {
+        const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
+        const pathname = decodeURIComponent(url.pathname);
 
-    const projectName = match[1];
-    const relativePath = match[2];
-    const projConfig = configMap.get(projectName);
+        // Dashboard
+        if (pathname === '/' || pathname === '') {
+            // Re-discover on each request so new reports appear on refresh
+            const freshProjects = discoverProjects(config.projects);
+            const html = renderDashboard(config.title, freshProjects);
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end(html);
+            return;
+        }
 
-    if (!projConfig) {
-      res.writeHead(404, { 'Content-Type': 'text/plain' });
-      res.end('Project not found');
-      return;
-    }
+        // Static file serving: /projects/<name>/...
+        const match = pathname.match(/^\/projects\/([^/]+)\/(.+)$/);
+        if (!match) {
+            res.writeHead(404, { 'Content-Type': 'text/plain' });
+            res.end('Not Found');
+            return;
+        }
 
-    const megatestDir = path.join(path.resolve(projConfig.path), '.megatest');
+        const projectName = match[1];
+        const relativePath = match[2];
+        const projConfig = configMap.get(projectName);
 
-    // Map to filesystem: /projects/<name>/X → <repo>/.megatest/X
-    const fsPath = path.resolve(megatestDir, relativePath);
+        if (!projConfig) {
+            res.writeHead(404, { 'Content-Type': 'text/plain' });
+            res.end('Project not found');
+            return;
+        }
 
-    // Path traversal protection
-    if (!fsPath.startsWith(megatestDir + path.sep) && fsPath !== megatestDir) {
-      res.writeHead(403, { 'Content-Type': 'text/plain' });
-      res.end('Forbidden');
-      return;
-    }
+        const megatestDir = path.join(path.resolve(projConfig.path), '.megatest');
 
-    serveFile(res, fsPath);
-  };
+        // Map to filesystem: /projects/<name>/X → <repo>/.megatest/X
+        const fsPath = path.resolve(megatestDir, relativePath);
+
+        // Path traversal protection
+        if (!fsPath.startsWith(megatestDir + path.sep) && fsPath !== megatestDir) {
+            res.writeHead(403, { 'Content-Type': 'text/plain' });
+            res.end('Forbidden');
+            return;
+        }
+
+        serveFile(res, fsPath);
+    };
 }
 
 // ---------------------------------------------------------------------------
@@ -541,53 +541,53 @@ function createHandler(config: ServeConfig) {
 // ---------------------------------------------------------------------------
 
 export interface ServeOptions {
-  config: string;
-  port?: string;
-  host?: string;
+    config: string;
+    port?: string;
+    host?: string;
 }
 
 export async function runServe(opts: ServeOptions): Promise<void> {
-  const configPath = path.resolve(opts.config);
-  const config = loadConfig(configPath);
+    const configPath = path.resolve(opts.config);
+    const config = loadConfig(configPath);
 
-  // CLI flags override config
-  if (opts.port) {
-    const parsed = Number.parseInt(opts.port, 10);
-    if (Number.isNaN(parsed) || parsed < 1 || parsed > 65535) {
-      console.error(`Invalid port: ${opts.port}`);
-      process.exit(1);
+    // CLI flags override config
+    if (opts.port) {
+        const parsed = Number.parseInt(opts.port, 10);
+        if (Number.isNaN(parsed) || parsed < 1 || parsed > 65535) {
+            console.error(`Invalid port: ${opts.port}`);
+            process.exit(1);
+        }
+        config.server.port = parsed;
     }
-    config.server.port = parsed;
-  }
-  if (opts.host) config.server.host = opts.host;
+    if (opts.host) config.server.host = opts.host;
 
-  const projects = discoverProjects(config.projects);
+    const projects = discoverProjects(config.projects);
 
-  if (projects.length === 0) {
-    console.warn('No projects with reports found. Dashboard will be empty.');
-  } else {
-    console.log(`Found ${projects.length} project(s):`);
-    for (const p of projects) {
-      const reports = listReports(p);
-      console.log(`  ${p.name}: ${reports.length} report(s) — ${p.repoPath}`);
-    }
-  }
-
-  const handler = createHandler(config);
-  const server = http.createServer(handler);
-
-  const { port, host } = config.server;
-
-  server.on('error', (err: NodeJS.ErrnoException) => {
-    if (err.code === 'EADDRINUSE') {
-      console.error(`Port ${port} is already in use. Try --port <number>`);
+    if (projects.length === 0) {
+        console.warn('No projects with reports found. Dashboard will be empty.');
     } else {
-      console.error(`Server error: ${err.message}`);
+        console.log(`Found ${projects.length} project(s):`);
+        for (const p of projects) {
+            const reports = listReports(p);
+            console.log(`  ${p.name}: ${reports.length} report(s) — ${p.repoPath}`);
+        }
     }
-    process.exit(1);
-  });
 
-  server.listen(port, host, () => {
-    console.log(`\nMegatest report server running at http://${host}:${port}/`);
-  });
+    const handler = createHandler(config);
+    const server = http.createServer(handler);
+
+    const { port, host } = config.server;
+
+    server.on('error', (err: NodeJS.ErrnoException) => {
+        if (err.code === 'EADDRINUSE') {
+            console.error(`Port ${port} is already in use. Try --port <number>`);
+        } else {
+            console.error(`Server error: ${err.message}`);
+        }
+        process.exit(1);
+    });
+
+    server.listen(port, host, () => {
+        console.log(`\nMegatest report server running at http://${host}:${port}/`);
+    });
 }

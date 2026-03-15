@@ -9,12 +9,12 @@ import { WebpCodec } from './webp.js';
 export type ImageFormat = 'png' | 'webp';
 
 export function createCodec(format: ImageFormat): ImageCodec {
-  switch (format) {
-    case 'png':
-      return new PngCodec();
-    case 'webp':
-      return new WebpCodec();
-    default:
-      throw new Error(`Unsupported image format: ${format as string}`);
-  }
+    switch (format) {
+        case 'png':
+            return new PngCodec();
+        case 'webp':
+            return new WebpCodec();
+        default:
+            throw new Error(`Unsupported image format: ${format as string}`);
+    }
 }

@@ -3,96 +3,96 @@ import * as path from 'node:path';
 import type { CheckpointResult, ReportMeta, RunResult } from '../types.js';
 
 function escapeHtml(str: string): string {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 function formatNumber(n: number): string {
-  return n.toLocaleString('en-US');
+    return n.toLocaleString('en-US');
 }
 
 function formatDiffPercent(pct: number | null): string {
-  if (pct === null) return 'N/A';
-  return `${pct.toFixed(2)}%`;
+    if (pct === null) return 'N/A';
+    return `${pct.toFixed(2)}%`;
 }
 
 function badgeClass(status: string): string {
-  switch (status) {
-    case 'pass':
-      return 'badge--pass';
-    case 'fail':
-      return 'badge--changed';
-    case 'new':
-      return 'badge--new';
-    case 'error':
-      return 'badge--fail';
-    default:
-      return 'badge--muted';
-  }
+    switch (status) {
+        case 'pass':
+            return 'badge--pass';
+        case 'fail':
+            return 'badge--changed';
+        case 'new':
+            return 'badge--new';
+        case 'error':
+            return 'badge--fail';
+        default:
+            return 'badge--muted';
+    }
 }
 
 function badgeLabel(status: string): string {
-  switch (status) {
-    case 'pass':
-      return 'Passed';
-    case 'fail':
-      return 'Changed';
-    case 'new':
-      return 'New';
-    case 'error':
-      return 'Failed';
-    default:
-      return status;
-  }
+    switch (status) {
+        case 'pass':
+            return 'Passed';
+        case 'fail':
+            return 'Changed';
+        case 'new':
+            return 'New';
+        case 'error':
+            return 'Failed';
+        default:
+            return status;
+    }
 }
 
 function statusColor(status: string): string {
-  switch (status) {
-    case 'pass':
-      return 'var(--c-pass)';
-    case 'fail':
-      return 'var(--c-changed)';
-    case 'new':
-      return 'var(--c-new)';
-    case 'error':
-      return 'var(--c-fail)';
-    default:
-      return 'var(--c-muted)';
-  }
+    switch (status) {
+        case 'pass':
+            return 'var(--c-pass)';
+        case 'fail':
+            return 'var(--c-changed)';
+        case 'new':
+            return 'var(--c-new)';
+        case 'error':
+            return 'var(--c-fail)';
+        default:
+            return 'var(--c-muted)';
+    }
 }
 
 function checkpointModifier(status: string): string {
-  switch (status) {
-    case 'fail':
-      return 'checkpoint--changed';
-    case 'new':
-      return 'checkpoint--new';
-    case 'error':
-      return 'checkpoint--fail';
-    default:
-      return '';
-  }
+    switch (status) {
+        case 'fail':
+            return 'checkpoint--changed';
+        case 'new':
+            return 'checkpoint--new';
+        case 'error':
+            return 'checkpoint--fail';
+        default:
+            return '';
+    }
 }
 
 function getImagePath(cp: CheckpointResult, type: 'actual' | 'diff' | 'baseline', ext: string): string {
-  const slug = `${cp.checkpoint}-${cp.viewport}`;
-  switch (type) {
-    case 'actual':
-      return `${slug}-actual${ext}`;
-    case 'diff':
-      return `${slug}-diff${ext}`;
-    case 'baseline':
-      return `../../baselines/${slug}${ext}`;
-  }
+    const slug = `${cp.checkpoint}-${cp.viewport}`;
+    switch (type) {
+        case 'actual':
+            return `${slug}-actual${ext}`;
+        case 'diff':
+            return `${slug}-diff${ext}`;
+        case 'baseline':
+            return `../../baselines/${slug}${ext}`;
+    }
 }
 
 function renderFailedCheckpoint(cp: CheckpointResult, ext: string): string {
-  const baselineSrc = getImagePath(cp, 'baseline', ext);
-  const actualSrc = getImagePath(cp, 'actual', ext);
-  const diffSrc = getImagePath(cp, 'diff', ext);
-  const diffText = cp.diffPercent !== null ? `${cp.diffPercent.toFixed(2)}% diff` : 'N/A';
-  const pixelText = cp.diffPixels !== null ? `${formatNumber(cp.diffPixels)} changed px` : '';
+    const baselineSrc = getImagePath(cp, 'baseline', ext);
+    const actualSrc = getImagePath(cp, 'actual', ext);
+    const diffSrc = getImagePath(cp, 'diff', ext);
+    const diffText = cp.diffPercent !== null ? `${cp.diffPercent.toFixed(2)}% diff` : 'N/A';
+    const pixelText = cp.diffPixels !== null ? `${formatNumber(cp.diffPixels)} changed px` : '';
 
-  return `
+    return `
         <div class="checkpoint ${checkpointModifier(cp.status)}" data-status="${cp.status}">
           <div class="checkpoint__header">
             <span class="badge ${badgeClass(cp.status)}">${badgeLabel(cp.status)}</span>
@@ -128,9 +128,9 @@ function renderFailedCheckpoint(cp: CheckpointResult, ext: string): string {
 }
 
 function renderNewCheckpoint(cp: CheckpointResult, ext: string): string {
-  const actualSrc = getImagePath(cp, 'actual', ext);
+    const actualSrc = getImagePath(cp, 'actual', ext);
 
-  return `
+    return `
         <div class="checkpoint ${checkpointModifier(cp.status)}" data-status="${cp.status}">
           <div class="checkpoint__header">
             <span class="badge ${badgeClass(cp.status)}">${badgeLabel(cp.status)}</span>
@@ -157,7 +157,7 @@ function renderNewCheckpoint(cp: CheckpointResult, ext: string): string {
 }
 
 function renderErrorCheckpoint(cp: CheckpointResult): string {
-  return `
+    return `
         <div class="checkpoint ${checkpointModifier(cp.status)}" data-status="${cp.status}">
           <div class="checkpoint__header">
             <span class="badge ${badgeClass(cp.status)}">${badgeLabel(cp.status)}</span>
@@ -174,10 +174,10 @@ function renderErrorCheckpoint(cp: CheckpointResult): string {
 }
 
 function renderPassedRow(cp: CheckpointResult, ext: string): string {
-  const diffText = formatDiffPercent(cp.diffPercent);
-  const baselineSrc = getImagePath(cp, 'baseline', ext);
-  const rowId = `passed-${escapeHtml(cp.workflow)}-${escapeHtml(cp.checkpoint)}-${escapeHtml(cp.viewport)}`;
-  return `
+    const diffText = formatDiffPercent(cp.diffPercent);
+    const baselineSrc = getImagePath(cp, 'baseline', ext);
+    const rowId = `passed-${escapeHtml(cp.workflow)}-${escapeHtml(cp.checkpoint)}-${escapeHtml(cp.viewport)}`;
+    return `
             <div class="checkpoint" style="border:none;border-radius:0;border-bottom:1px solid var(--c-border)">
               <div class="checkpoint__header passed-row-toggle" onclick="togglePassedRow('${rowId}')" style="cursor:pointer">
                 <span class="dot dot--pass"></span>
@@ -472,36 +472,36 @@ img { max-width: 100%; display: block; }
 `;
 
 export function generateHtmlReport(
-  result: RunResult,
-  reportDir: string,
-  _baselinesDir: string,
-  extension = '.png',
+    result: RunResult,
+    reportDir: string,
+    _baselinesDir: string,
+    extension = '.png',
 ): string {
-  const failed = result.checkpoints.filter((cp) => cp.status === 'fail');
-  const newCps = result.checkpoints.filter((cp) => cp.status === 'new');
-  const errorCps = result.checkpoints.filter((cp) => cp.status === 'error');
-  const passed = result.checkpoints.filter((cp) => cp.status === 'pass');
-  const total = result.checkpoints.length;
+    const failed = result.checkpoints.filter((cp) => cp.status === 'fail');
+    const newCps = result.checkpoints.filter((cp) => cp.status === 'new');
+    const errorCps = result.checkpoints.filter((cp) => cp.status === 'error');
+    const passed = result.checkpoints.filter((cp) => cp.status === 'pass');
+    const total = result.checkpoints.length;
 
-  // Build failed/error checkpoints HTML
-  const failedHtml = [...failed, ...errorCps]
-    .map((cp) => {
-      if (cp.status === 'error') {
-        return renderErrorCheckpoint(cp);
-      }
-      return renderFailedCheckpoint(cp, extension);
-    })
-    .join('\n');
+    // Build failed/error checkpoints HTML
+    const failedHtml = [...failed, ...errorCps]
+        .map((cp) => {
+            if (cp.status === 'error') {
+                return renderErrorCheckpoint(cp);
+            }
+            return renderFailedCheckpoint(cp, extension);
+        })
+        .join('\n');
 
-  // Build new checkpoints HTML
-  const newHtml = newCps.map((cp) => renderNewCheckpoint(cp, extension)).join('\n');
+    // Build new checkpoints HTML
+    const newHtml = newCps.map((cp) => renderNewCheckpoint(cp, extension)).join('\n');
 
-  // Build passed checkpoints HTML
-  const passedRows = passed.map((cp) => renderPassedRow(cp, extension)).join('\n');
+    // Build passed checkpoints HTML
+    const passedRows = passed.map((cp) => renderPassedRow(cp, extension)).join('\n');
 
-  const passedSection =
-    passed.length > 0
-      ? `
+    const passedSection =
+        passed.length > 0
+            ? `
         <div class="card" data-status="pass">
           <div class="card__header passed-toggle" onclick="togglePassed()">
             <span class="badge badge--pass">Passed</span>
@@ -512,12 +512,12 @@ export function generateHtmlReport(
 ${passedRows}
           </div>
         </div>`
-      : '';
+            : '';
 
-  const timestamp = result.timestamp;
-  const durationSec = (result.duration / 1000).toFixed(1);
+    const timestamp = result.timestamp;
+    const durationSec = (result.duration / 1000).toFixed(1);
 
-  const html = `<!DOCTYPE html>
+    const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -698,23 +698,23 @@ document.addEventListener('keydown', function(e) {
 </body>
 </html>`;
 
-  // Ensure reportDir exists
-  fs.mkdirSync(reportDir, { recursive: true });
+    // Ensure reportDir exists
+    fs.mkdirSync(reportDir, { recursive: true });
 
-  const outputPath = path.join(reportDir, 'index.html');
-  fs.writeFileSync(outputPath, html, 'utf-8');
+    const outputPath = path.join(reportDir, 'index.html');
+    fs.writeFileSync(outputPath, html, 'utf-8');
 
-  const meta: ReportMeta = {
-    commitHash: result.commitHash,
-    timestamp: result.timestamp,
-    passed: result.passed,
-    failed: result.failed,
-    newCount: result.newCount,
-    errors: result.errors,
-    duration: result.duration,
-    totalCheckpoints: result.checkpoints.length,
-  };
-  fs.writeFileSync(path.join(reportDir, 'meta.json'), JSON.stringify(meta, null, 2));
+    const meta: ReportMeta = {
+        commitHash: result.commitHash,
+        timestamp: result.timestamp,
+        passed: result.passed,
+        failed: result.failed,
+        newCount: result.newCount,
+        errors: result.errors,
+        duration: result.duration,
+        totalCheckpoints: result.checkpoints.length,
+    };
+    fs.writeFileSync(path.join(reportDir, 'meta.json'), JSON.stringify(meta, null, 2));
 
-  return outputPath;
+    return outputPath;
 }

@@ -2,16 +2,16 @@ import { type Browser, type BrowserContext, type Page, chromium } from 'playwrig
 import type { Viewport } from '../config/schema.js';
 
 export async function launchBrowser(): Promise<Browser> {
-  return chromium.launch({ headless: true });
+    return chromium.launch({ headless: true });
 }
 
 export async function createContext(browser: Browser, viewport: Viewport): Promise<BrowserContext> {
-  return browser.newContext({
-    viewport: { width: viewport.width, height: viewport.height },
-    reducedMotion: 'reduce',
-  });
+    return browser.newContext({
+        viewport: { width: viewport.width, height: viewport.height },
+        reducedMotion: 'reduce',
+    });
 }
 
 export async function createPage(context: BrowserContext): Promise<Page> {
-  return context.newPage();
+    return context.newPage();
 }
