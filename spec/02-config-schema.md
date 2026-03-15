@@ -34,6 +34,9 @@ In both cases, the YAML format and validation rules described in this spec apply
   includes/               # Optional. Reusable step sequences.
     <include-name>.yml
     ...
+  plans/                  # Optional. Test plan aggregations.
+    <plan-name>.yml
+    ...
 ```
 
 ### 2.1 File Naming Rules
@@ -41,7 +44,8 @@ In both cases, the YAML format and validation rules described in this spec apply
 - All filenames MUST use lowercase alphanumeric characters and hyphens only: `[a-z0-9-]+\.yml`.
 - Workflow filenames MUST match the `name` field inside the file (without the `.yml` extension). A mismatch is a validation error.
 - Include filenames MUST match the `name` field inside the file (without the `.yml` extension).
-- No two workflow files may share the same `name`. No two include files may share the same `name`.
+- Plan filenames MUST match the `name` field inside the file (without the `.yml` extension).
+- No two workflow files may share the same `name`. No two include files may share the same `name`. No two plan files may share the same `name`.
 - Files that do not match the naming pattern MUST be ignored with a warning.
 
 ### 2.2 Required vs Optional Paths
@@ -51,6 +55,7 @@ In both cases, the YAML format and validation rules described in this spec apply
 | `.megatest/config.yml` | Yes | Validation fails without it |
 | `.megatest/workflows/` | Yes | Must contain at least one `.yml` file |
 | `.megatest/includes/` | No | Only required if any workflow uses `include` steps |
+| `.megatest/plans/` | No | If absent, the CLI runs all workflows |
 
 ## 3. config.yml Schema
 
@@ -248,7 +253,7 @@ variables:
   TEST_PASS: "${env:TEST_PASSWORD}"
 ```
 
-See Section 8 for interpolation syntax.
+See Section 9 for interpolation syntax.
 
 ## 4. Workflow File Schema (workflows/*.yml)
 
@@ -299,9 +304,36 @@ steps: [Step]             # Required. Non-empty.
 
 When a workflow step is `include: <name>`, the runner replaces that step with the full step sequence from the matching include file. Includes are resolved before execution begins (static expansion).
 
-Include files MAY themselves contain `include` steps (nested includes). See Section 9.2 for cycle detection rules.
+Include files MAY themselves contain `include` steps (nested includes). See Section 10.2 for cycle detection rules.
 
-## 6. Step Types
+## 6. Plan File Schema (plans/*.yml)
+
+Each file in `plans/` defines a named aggregation of workflows. Plans are optional. If no `plans/` directory exists, the CLI runs all workflows.
+
+```yaml
+name: smoke
+description: Quick smoke test covering critical flows
+workflows:
+  - homepage
+  - login
+```
+
+### 6.1 Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | `string` | Yes | Plan identifier. Must match the filename (without `.yml`). Pattern: `[a-z0-9-]+`. |
+| `description` | `string` | No | Human-readable description of the plan. |
+| `workflows` | `array of string` | Yes | Ordered list of workflow names to include in this plan. Must be non-empty. Each entry must reference an existing workflow file in `workflows/`. |
+
+### 6.2 Behavior
+
+- Plans are optional. If no `plans/` directory exists, the CLI runs all workflows.
+- A `default.yml` plan, if present, is used when no `--plan` flag is specified.
+- Plans determine which workflows run and in what order.
+- Workflow names in a plan must be unique (no duplicates within a single plan).
+
+## 7. Step Types
 
 A step is a single-key YAML mapping. The key identifies the step type; the value provides the step's parameters. Each step mapping MUST have exactly one key.
 
@@ -314,7 +346,7 @@ A step is a single-key YAML mapping. The key identifies the step type; the value
   wait: 1000
 ```
 
-### 6.1 `open`
+### 7.1 `open`
 
 Navigate the browser to a URL.
 
@@ -328,7 +360,7 @@ Navigate the browser to a URL.
 - **Maps to:** `page.goto(url)`
 - **Behavior:** Navigates to the URL, then waits according to `defaults.waitAfterNavigation`.
 
-### 6.2 `click`
+### 7.2 `click`
 
 Click an element identified by a locator.
 
@@ -336,10 +368,10 @@ Click an element identified by a locator.
 - click: <Locator>
 ```
 
-- **Value type:** `Locator` (see Section 7).
-- **Maps to:** `page.locator(selector).click()` (locator resolved via Playwright semantic locators; see Section 7).
+- **Value type:** `Locator` (see Section 8).
+- **Maps to:** `page.locator(selector).click()` (locator resolved via Playwright semantic locators; see Section 8).
 
-### 6.3 `fill`
+### 7.3 `fill`
 
 Clear an input field and type new text into it.
 
@@ -349,12 +381,12 @@ Clear an input field and type new text into it.
     text: <string>
 ```
 
-- **Value type:** `Locator` (see Section 7) extended with a required `text` field.
+- **Value type:** `Locator` (see Section 8) extended with a required `text` field.
 - **`text`:** The string to fill. Variable interpolation applies.
 - **Maps to:** `page.locator(selector).fill(text)`
 - **Behavior:** The existing field content is cleared before filling.
 
-### 6.4 `type`
+### 7.4 `type`
 
 Type text into an element without clearing existing content first.
 
@@ -367,7 +399,7 @@ Type text into an element without clearing existing content first.
 - **Value type:** Same shape as `fill`.
 - **Maps to:** `page.locator(selector).pressSequentially(text)`
 
-### 6.5 `hover`
+### 7.5 `hover`
 
 Hover over an element.
 
@@ -375,10 +407,10 @@ Hover over an element.
 - hover: <Locator>
 ```
 
-- **Value type:** `Locator` (see Section 7).
+- **Value type:** `Locator` (see Section 8).
 - **Maps to:** `page.locator(selector).hover()`
 
-### 6.6 `select`
+### 7.6 `select`
 
 Select an option from a `<select>` element.
 
@@ -392,7 +424,7 @@ Select an option from a `<select>` element.
 - **`value`:** The option value to select.
 - **Maps to:** `page.locator(selector).selectOption(value)`
 
-### 6.7 `wait`
+### 7.7 `wait`
 
 Wait for a condition to be met.
 
@@ -428,7 +460,7 @@ Wait for a condition to be met.
 - When `wait` is an object, exactly one key must be present.
 - `wait: { load: <strategy> }` accepts `"networkidle"` or `"load"`.
 
-### 6.8 `screenshot`
+### 7.8 `screenshot`
 
 Capture a screenshot for visual comparison.
 
@@ -461,7 +493,7 @@ Capture a screenshot for visual comparison.
 - When `mask` is present, the runner removes or neutralizes the matching regions
   in both baseline and actual images before diffing.
 
-### 6.9 `scroll`
+### 7.9 `scroll`
 
 Scroll the page.
 
@@ -476,7 +508,7 @@ Scroll the page.
 - **Maps to:** `page.evaluate(() => window.scrollBy(0, n))` or `page.evaluate(() => window.scrollBy(0, -n))`
 - Specifying both `down` and `up` in the same step is a validation error.
 
-### 6.10 `press`
+### 7.10 `press`
 
 Press a keyboard key or key combination.
 
@@ -489,7 +521,7 @@ Press a keyboard key or key combination.
 - **Examples:** `"Enter"`, `"Tab"`, `"Escape"`, `"Control+a"`, `"Meta+Shift+p"`
 - **Maps to:** `page.keyboard.press(key)`
 
-### 6.11 `eval`
+### 7.11 `eval`
 
 Evaluate arbitrary JavaScript in the browser context.
 
@@ -502,7 +534,7 @@ Evaluate arbitrary JavaScript in the browser context.
 - **Maps to:** `page.evaluate(javascript)`
 - **Security note:** The runner does not sandbox `eval` beyond the browser context. This is acceptable because Megatest runs in disposable containers.
 
-### 6.12 `include`
+### 7.12 `include`
 
 Inline a reusable step sequence from `includes/`.
 
@@ -512,9 +544,9 @@ Inline a reusable step sequence from `includes/`.
 
 - **Value type:** `string`
 - **Description:** The `name` of an include file (without `.yml`). The runner replaces this step with the full step list from the referenced include.
-- **Resolution:** Static, before execution. See Section 9.2 for rules.
+- **Resolution:** Static, before execution. See Section 10.2 for rules.
 
-### 6.13 `set-viewport`
+### 7.13 `set-viewport`
 
 Change the browser viewport dimensions mid-workflow.
 
@@ -531,11 +563,11 @@ Change the browser viewport dimensions mid-workflow.
 - When an object, it must contain `width` and `height` (both required, positive integers).
 - **Maps to:** `page.setViewportSize({ width, height })`
 
-## 7. Locator Type
+## 8. Locator Type
 
 A Locator identifies a DOM element for interaction. It is a YAML object with exactly one locator key. Steps that accept a Locator (`click`, `fill`, `type`, `hover`, `select`) use this type.
 
-### 7.1 Locator Keys
+### 8.1 Locator Keys
 
 | Key | Value Type | Description | Playwright Method |
 |-----|-----------|-------------|-------------------|
@@ -548,7 +580,7 @@ A Locator identifies a DOM element for interaction. It is a YAML object with exa
 | `xpath` | `string` | XPath expression | `page.locator(xpathSelector)` |
 | `nth` | `object` | CSS selector + zero-based index | `page.locator(selector).nth(index)` |
 
-### 7.2 Locator Constraints
+### 8.2 Locator Constraints
 
 - Exactly one locator key MUST be present. Specifying multiple locator keys (e.g., both `testid` and `text`) is a validation error.
 - The `role` locator optionally accepts a sibling `name` key to further filter by accessible name.
@@ -562,7 +594,7 @@ A Locator identifies a DOM element for interaction. It is a YAML object with exa
 - click: { nth: { selector: "a.nav-link", index: 2 } }
 ```
 
-### 7.3 Locator Priority
+### 8.3 Locator Priority
 
 When an AI agent generates configuration, it SHOULD prefer locator types in this order of stability (most stable first):
 
@@ -577,7 +609,7 @@ When an AI agent generates configuration, it SHOULD prefer locator types in this
 
 This ordering is advisory. The runner does not enforce it.
 
-### 7.4 Variable Interpolation in Locators
+### 8.4 Variable Interpolation in Locators
 
 All locator string values support variable interpolation. For example:
 
@@ -586,9 +618,9 @@ All locator string values support variable interpolation. For example:
 - click: { text: "${SUBMIT_LABEL}" }
 ```
 
-## 8. Variable Interpolation
+## 9. Variable Interpolation
 
-### 8.1 Syntax
+### 9.1 Syntax
 
 Variables are referenced using `${...}` syntax within string values:
 
@@ -597,7 +629,7 @@ Variables are referenced using `${...}` syntax within string values:
 | `${VAR_NAME}` | References a variable from `config.yml` `variables`. |
 | `${env:VAR_NAME}` | References a runtime secret injected by the Megatest platform. |
 
-### 8.2 Where Interpolation Applies
+### 9.2 Where Interpolation Applies
 
 Interpolation is performed in the following contexts:
 
@@ -614,7 +646,7 @@ Interpolation does NOT apply to:
 - Field names, step type keys, or structural fields (`name`, `description`, `version`).
 - Numeric values (`threshold`, `width`, `height`, `timeout`).
 
-### 8.3 Resolution Order
+### 9.3 Resolution Order
 
 1. **Built-in run variables** are injected first. These are read-only and cannot be overridden by `variables` in config:
    | Variable | Description | Source |
@@ -627,19 +659,19 @@ Interpolation does NOT apply to:
 3. `${env:VAR_NAME}` is resolved from the runtime environment (project secrets).
 4. If a variable is not found, interpolation fails and the run reports an error before execution begins.
 
-### 8.4 Escaping
+### 9.4 Escaping
 
 To produce a literal `${` in output, use `$${`. Example: `$${NOT_A_VAR}` outputs `${NOT_A_VAR}`.
 
-### 8.5 Nesting
+### 9.5 Nesting
 
 Nested interpolation is NOT supported. `${${VAR}}` is a validation error.
 
-## 9. Validation Rules
+## 10. Validation Rules
 
 The runner MUST validate the full configuration before executing any steps. Validation errors are reported all at once, not one at a time.
 
-### 9.1 Structural Validation
+### 10.1 Structural Validation
 
 | Rule | Severity |
 |------|----------|
@@ -658,9 +690,14 @@ The runner MUST validate the full configuration before executing any steps. Vali
 | Duplicate screenshot name within a workflow | Error |
 | Duplicate workflow names | Error |
 | Duplicate include names | Error |
-| File in `workflows/` or `includes/` not matching naming pattern `[a-z0-9-]+\.yml` | Warning |
+| Duplicate plan names | Error |
+| Plan `name` does not match filename | Error |
+| Plan has empty `workflows` array | Error |
+| Plan references a workflow name not found in `workflows/` | Error |
+| Duplicate workflow name within a single plan | Error |
+| File in `workflows/`, `includes/`, or `plans/` not matching naming pattern `[a-z0-9-]+\.yml` | Warning |
 
-### 9.2 Include Resolution Validation
+### 10.2 Include Resolution Validation
 
 | Rule | Severity |
 |------|----------|
@@ -671,7 +708,7 @@ The runner MUST validate the full configuration before executing any steps. Vali
 
 Circular includes are detected via a depth-first traversal of the include graph before any execution begins. The runner MUST report the cycle path (e.g., `"login -> setup-mfa -> login"`).
 
-### 9.3 Variable Validation
+### 10.3 Variable Validation
 
 | Rule | Severity |
 |------|----------|
@@ -683,7 +720,7 @@ Circular includes are detected via a depth-first traversal of the include graph 
 
 Note: `${env:...}` references cannot be validated at config-parse time since secrets are injected at runtime. These are validated at the start of execution, before any steps run.
 
-### 9.4 Type Validation
+### 10.4 Type Validation
 
 | Rule | Severity |
 |------|----------|
@@ -699,7 +736,7 @@ Note: `${env:...}` references cannot be validated at config-parse time since sec
 | Locator object has zero locator keys | Error |
 | Locator object has multiple locator keys | Error |
 
-## 10. Formal Type Definitions
+## 11. Formal Type Definitions
 
 The following TypeScript-style definitions specify every type in the schema. These are normative.
 
@@ -764,6 +801,14 @@ interface WorkflowFile {
 interface IncludeFile {
   name: string;                            // Required. [a-z0-9-]+
   steps: Step[];                           // Required. Non-empty.
+}
+
+// ─── Plan File ──────────────────────────────────────────────
+
+interface PlanFile {
+  name: string;                            // Required. [a-z0-9-]+
+  description?: string;
+  workflows: string[];                     // Required. Non-empty. Each must match a workflow name.
 }
 
 // ─── Steps ───────────────────────────────────────────────────
@@ -832,11 +877,11 @@ type LocatorWithText = Locator & { text: string };
 type LocatorWithValue = Locator & { value: string };
 ```
 
-## 11. JSON Schema
+## 12. JSON Schema
 
 The following JSON Schema can be used for programmatic validation of `config.yml`. Separate schemas for workflow and include files follow the same structure.
 
-### 11.1 config.yml JSON Schema
+### 12.1 config.yml JSON Schema
 
 ```json
 {
@@ -942,7 +987,7 @@ The following JSON Schema can be used for programmatic validation of `config.yml
 }
 ```
 
-### 11.2 Workflow File JSON Schema
+### 12.2 Workflow File JSON Schema
 
 ```json
 {
@@ -1321,7 +1366,7 @@ The following JSON Schema can be used for programmatic validation of `config.yml
 }
 ```
 
-### 11.3 Include File JSON Schema
+### 12.3 Include File JSON Schema
 
 ```json
 {
@@ -1345,9 +1390,40 @@ The following JSON Schema can be used for programmatic validation of `config.yml
 }
 ```
 
-## 12. Complete Example
+### 12.4 Plan File JSON Schema
 
-### 12.1 config.yml
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://megatest.dev/schemas/plan.json",
+  "title": "Megatest Plan",
+  "type": "object",
+  "required": ["name", "workflows"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$"
+    },
+    "description": {
+      "type": "string"
+    },
+    "workflows": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9-]+$"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    }
+  }
+}
+```
+
+## 13. Complete Example
+
+### 13.1 config.yml
 
 ```yaml
 version: "1"
@@ -1386,7 +1462,7 @@ variables:
   TEST_PASS: "${env:TEST_PASSWORD}"
 ```
 
-### 12.2 workflows/homepage.yml
+### 13.2 workflows/homepage.yml
 
 ```yaml
 name: homepage
@@ -1402,7 +1478,7 @@ steps:
   - screenshot: footer
 ```
 
-### 12.3 workflows/dashboard.yml
+### 13.3 workflows/dashboard.yml
 
 ```yaml
 name: dashboard
@@ -1418,7 +1494,7 @@ steps:
   - screenshot: export-confirmation
 ```
 
-### 12.4 workflows/signup-form.yml
+### 13.4 workflows/signup-form.yml
 
 ```yaml
 name: signup-form
@@ -1441,7 +1517,7 @@ steps:
   - screenshot: signup-success
 ```
 
-### 12.5 includes/login.yml
+### 13.5 includes/login.yml
 
 ```yaml
 name: login
@@ -1454,9 +1530,19 @@ steps:
   - wait: { load: networkidle }
 ```
 
-## 13. Edge Cases and Behavior
+### 13.6 plans/smoke.yml
 
-### 13.1 Empty or Missing Fields
+```yaml
+name: smoke
+description: Quick smoke test covering critical flows
+workflows:
+  - homepage
+  - dashboard
+```
+
+## 14. Edge Cases and Behavior
+
+### 14.1 Empty or Missing Fields
 
 | Scenario | Behavior |
 |----------|----------|
@@ -1469,45 +1555,49 @@ steps:
 | `variables: {}` | Valid. No variables defined. |
 | `viewports: {}` | Valid. No named viewports defined. Only `"desktop"` is available via the built-in default. |
 
-### 13.2 Missing Includes Directory
+### 14.2 Missing Includes Directory
 
 If no workflow uses `include` steps, the `includes/` directory is not required and its absence is not an error. If a workflow references `include: login` and the `includes/` directory does not exist or does not contain `login.yml`, that is a validation error.
 
-### 13.3 Circular Includes
+### 14.3 Missing Plans Directory
+
+If no `plans/` directory exists, the CLI runs all workflows. This is not an error. Plans are entirely optional.
+
+### 14.4 Circular Includes
 
 Circular includes are detected statically during the include-expansion phase. The runner builds a directed graph of include dependencies and checks for cycles before expanding any includes. If a cycle is found, the error message MUST include the full cycle path.
 
-### 13.4 Screenshot Name Collisions
+### 14.5 Screenshot Name Collisions
 
 Screenshot names must be unique within a single workflow's steps (after include expansion). Different workflows may use the same screenshot name because screenshots are namespaced by workflow and viewport in the output directory.
 
-### 13.5 Server Startup Failure
+### 14.6 Server Startup Failure
 
 **Managed mode:** If `setup.serve.cmd` exits before the `ready` URL returns 200, the run fails immediately with the server's stderr output included in the error. If the `timeout` is exceeded without a 200 response, the run fails with a timeout error and the server process is killed.
 
 **External mode:** If the `serve.url` does not return HTTP 200 within the `timeout` period, the run fails with error: "External URL {url} did not become ready within {timeout}s". The worker logs the last HTTP status code and any connection error for debugging.
 
-### 13.6 Step Timeout
+### 14.7 Step Timeout
 
 Each step has an implicit timeout (from `defaults.timeout` or the global default of 30000ms). If a step does not complete within this timeout, it fails and the workflow run is aborted. The timeout applies to the Playwright action execution, not to the YAML parsing.
 
-### 13.7 Variable Interpolation in Non-String Contexts
+### 14.8 Variable Interpolation in Non-String Contexts
 
 Variable interpolation ONLY applies to string values. If a numeric field (e.g., `threshold`, `width`) contains `${VAR}`, it is a validation error. Variables cannot be used to dynamically set numeric parameters.
 
-### 13.8 Unknown Fields
+### 14.9 Unknown Fields
 
-Unknown top-level keys in `config.yml`, workflow files, or include files are validation errors (strict mode). This prevents typos from silently being ignored (e.g., `threshhold` instead of `threshold`).
+Unknown top-level keys in `config.yml`, workflow files, include files, or plan files are validation errors (strict mode). This prevents typos from silently being ignored (e.g., `threshhold` instead of `threshold`).
 
-### 13.9 YAML Anchors and Aliases
+### 14.10 YAML Anchors and Aliases
 
 Standard YAML anchors (`&`) and aliases (`*`) are permitted since they are part of the YAML specification. However, AI agents generating configs SHOULD NOT use them because they reduce readability and are unnecessary given the `include` mechanism.
 
-### 13.10 File Encoding
+### 14.11 File Encoding
 
 All `.yml` files MUST be UTF-8 encoded. A BOM (byte order mark) is permitted but not required.
 
-## 14. Schema Versioning
+## 15. Schema Versioning
 
 The `version: "1"` field in `config.yml` identifies the schema version used by the configuration.
 
