@@ -106,12 +106,18 @@
           </div>
         </div>
 
-        <!-- Filters -->
+        <!-- State toggles + search (GitHub-style) -->
         <div class="filters" style="padding-left:0">
-          <button class="filter-chip active">All</button>
-          <button class="filter-chip">Failed</button>
-          <button class="filter-chip">Passed</button>
-          <button class="filter-chip">Running</button>
+          <div class="state-toggles">
+            <button class="state-toggle active" data-show-state="open">
+              <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 9.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/><path d="M8 0a8 8 0 100 16A8 8 0 008 0zM1.5 8a6.5 6.5 0 1113 0 6.5 6.5 0 01-13 0z"/></svg>
+              2 Open
+            </button>
+            <button class="state-toggle" data-show-state="closed">
+              <svg viewBox="0 0 16 16" fill="currentColor"><path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/></svg>
+              3 Closed
+            </button>
+          </div>
           <div class="search-wrap ml-auto">
             <svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.5 7a4.499 4.499 0 11-9 0 4.499 4.499 0 019 0zm-.82 4.74a6 6 0 111.06-1.06l3.04 3.04a.75.75 0 11-1.06 1.06l-3.04-3.04z"/></svg>
             <input class="search-input" type="text" placeholder="Filter by branch...">
@@ -119,8 +125,8 @@
         </div>
 
         <!-- Run list -->
-        <div class="card">
-          <a class="run-item" href="review.html">
+        <div class="card" id="run-list">
+          <a class="run-item" href="review.html" data-state="open">
             <span class="dot dot--fail"></span>
             <div class="run-item__info">
               <div class="run-item__title">
@@ -145,7 +151,7 @@
             </div>
           </a>
 
-          <a class="run-item" href="review.html">
+          <a class="run-item" href="review.html" data-state="open">
             <span class="dot dot--run"></span>
             <div class="run-item__info">
               <div class="run-item__title">
@@ -164,7 +170,7 @@
             </div>
           </a>
 
-          <a class="run-item" href="review.html">
+          <a class="run-item" href="review.html" data-state="closed" hidden>
             <span class="dot dot--pass"></span>
             <div class="run-item__info">
               <div class="run-item__title">
@@ -183,7 +189,7 @@
             </div>
           </a>
 
-          <a class="run-item" href="review.html">
+          <a class="run-item" href="review.html" data-state="closed" hidden>
             <span class="dot dot--pass"></span>
             <div class="run-item__info">
               <div class="run-item__title">
@@ -202,7 +208,7 @@
             </div>
           </a>
 
-          <a class="run-item" href="review.html">
+          <a class="run-item" href="review.html" data-state="closed" hidden>
             <span class="dot dot--fail"></span>
             <div class="run-item__info">
               <div class="run-item__title">

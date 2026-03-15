@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tabBar.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
 
-        const container = tabBar.closest('.card') || tabBar.parentElement;
+        const container = tabBar.closest('.main') || tabBar.closest('.card') || tabBar.parentElement;
         container.querySelectorAll('.tab-panel').forEach(p => {
           p.hidden = p.id !== target;
         });
@@ -28,6 +28,26 @@ document.addEventListener('DOMContentLoaded', () => {
       chip.addEventListener('click', () => {
         bar.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
         chip.classList.add('active');
+      });
+    });
+  });
+
+  /* --- State toggles (open/closed) ------------------------- */
+  document.querySelectorAll('.state-toggles').forEach(group => {
+    group.querySelectorAll('.state-toggle').forEach(toggle => {
+      toggle.addEventListener('click', () => {
+        const state = toggle.dataset.showState;
+        if (!state) return;
+
+        group.querySelectorAll('.state-toggle').forEach(t => t.classList.remove('active'));
+        toggle.classList.add('active');
+
+        const list = document.getElementById('run-list');
+        if (!list) return;
+
+        list.querySelectorAll('.run-item[data-state]').forEach(item => {
+          item.hidden = item.dataset.state !== state;
+        });
       });
     });
   });

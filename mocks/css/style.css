@@ -57,9 +57,23 @@ img { max-width: 100%; display: block; }
 .app           { display: flex; min-height: 100vh; }
 .sidebar       { width: var(--sidebar-w); background: var(--c-surface); border-right: 1px solid var(--c-border); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 10; }
 .main          { flex: 1; margin-left: var(--sidebar-w); }
-.page          { max-width: 1100px; margin: 0 auto; padding: var(--sp-xl); }
-.page--wide    { max-width: 1400px; }
-.page--full    { max-width: none; }
+.page          { padding: var(--sp-xl); }
+
+
+/* --- State toggles (GitHub-style open/closed) ------------- */
+.state-toggles {
+  display: flex; align-items: center; gap: var(--sp-md);
+}
+.state-toggle {
+  display: inline-flex; align-items: center; gap: var(--sp-xs);
+  padding: 0; font-size: var(--fs-md); font-family: var(--ff);
+  background: none; border: none; color: var(--c-muted);
+  cursor: pointer; font-weight: 500;
+  transition: color .15s;
+}
+.state-toggle:hover { color: var(--c-text); }
+.state-toggle.active { color: var(--c-text); font-weight: 600; }
+.state-toggle svg { width: 16px; height: 16px; }
 
 .sidebar__logo       { padding: var(--sp-lg); font-size: var(--fs-xl); font-weight: 700; border-bottom: 1px solid var(--c-border); display: flex; align-items: center; gap: var(--sp-sm); }
 .sidebar__logo svg   { width: 24px; height: 24px; }
