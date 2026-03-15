@@ -126,6 +126,12 @@ export async function executeStep(page: Page, step: Step, ctx: StepContext): Pro
         x,
         y,
       ] as [number, number]);
+      // Wait for scroll event handlers to fire and DOM updates to paint.
+      // Scroll events dispatch asynchronously even with instant behavior;
+      // double-rAF ensures handlers have run and their DOM changes are rendered.
+      await page.evaluate(
+        () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+      );
       return {};
     }
 

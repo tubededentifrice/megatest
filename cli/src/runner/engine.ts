@@ -156,6 +156,20 @@ export async function runEngine(opts: EngineOptions): Promise<CheckpointResult[]
           // Skip if the user explicitly scrolled (via a scroll step) since the last screenshot.
           if (stepType === 'screenshot' && stepCtx.screenshotMode === 'viewport' && !hasExplicitScroll) {
             await page.evaluate(() => window.scrollTo({ left: 0, top: 0, behavior: 'instant' }));
+            // Wait for scroll event handlers to settle and DOM updates to paint
+            await page.evaluate(
+              () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+            );
+          }
+
+          // Clear hover state before screenshots to prevent CSS :hover effects
+          // from leaking across steps (mouse position persists after click/fill/hover).
+          // Exception: if the previous step was an explicit hover, the user wants hover state captured.
+          if (stepType === 'screenshot') {
+            const prevStepType = i > 0 ? Object.keys(resolvedSteps[i - 1])[0] : null;
+            if (prevStepType !== 'hover') {
+              await page.mouse.move(0, 0);
+            }
           }
 
           printProgress(runIndex, totalRuns, workflowName, vpName, i + 1, resolvedSteps.length);
