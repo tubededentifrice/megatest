@@ -1,5 +1,7 @@
 # Megatest
 
+![Megatest Report](docs/report-screenshot.png)
+
 Local-first visual regression testing. Megatest takes screenshots of your web app, compares them against baselines, and generates a standalone HTML report showing what changed.
 
 It has two parts:
