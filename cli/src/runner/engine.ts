@@ -98,11 +98,27 @@ export async function runEngine(opts: EngineOptions): Promise<CheckpointResult[]
         };
 
         let stepFailed = false;
+        let hasExplicitScroll = false;
         for (let i = 0; i < resolvedSteps.length; i++) {
           const step = resolvedSteps[i];
+          const stepType = Object.keys(step)[0];
+
+          // Before viewport screenshots, reset scroll to top to ensure deterministic captures.
+          // Skip if the user explicitly scrolled (via a scroll step) since the last screenshot.
+          if (stepType === 'screenshot' && stepCtx.screenshotMode === 'viewport' && !hasExplicitScroll) {
+            await page.evaluate(() => window.scrollTo(0, 0));
+          }
+
           printProgress(workflowName, vpName, i + 1, resolvedSteps.length);
           try {
             const result = await executeStep(page, step, stepCtx);
+            // Track explicit scroll steps so we don't override intentional scroll positioning
+            if (stepType === 'scroll') {
+              hasExplicitScroll = true;
+            } else if (stepType === 'screenshot') {
+              hasExplicitScroll = false;
+            }
+
             if (result.checkpointName) {
               results.push({
                 workflow: workflowName,
