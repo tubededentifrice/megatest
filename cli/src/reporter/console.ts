@@ -1,19 +1,33 @@
 import type { RunResult } from '../types.js';
 
-export function printProgress(workflow: string, viewport: string, step: number, totalSteps: number): void {
-  process.stdout.write(`\r  ${workflow} [${viewport}] step ${step}/${totalSteps}`);
+export function printProgress(
+  index: number,
+  total: number,
+  workflow: string,
+  viewport: string,
+  step: number,
+  totalSteps: number,
+): void {
+  process.stdout.write(`\r  ${index}/${total} ${workflow} [${viewport}] step ${step}/${totalSteps}`);
 }
 
-export function printStepComplete(workflow: string, viewport: string): void {
+export function printStepComplete(index: number, total: number, workflow: string, viewport: string): void {
   // Clear the progress line before printing completion
   process.stdout.write('\r\x1b[K');
-  console.log(`  \u2713 ${workflow} [${viewport}]`);
+  console.log(`  ${index}/${total} \u2713 ${workflow} [${viewport}]`);
 }
 
-export function printStepError(workflow: string, viewport: string, error: string, stepDetail?: string): void {
+export function printStepError(
+  index: number,
+  total: number,
+  workflow: string,
+  viewport: string,
+  error: string,
+  stepDetail?: string,
+): void {
   // Clear the progress line before printing error
   process.stdout.write('\r\x1b[K');
-  console.error(`  \u2717 ${workflow} [${viewport}]: ${error}`);
+  console.error(`  ${index}/${total} \u2717 ${workflow} [${viewport}]: ${error}`);
   if (stepDetail) {
     console.error(`    step: ${stepDetail}`);
   }

@@ -71,6 +71,8 @@ export async function runEngine(opts: EngineOptions): Promise<CheckpointResult[]
   try {
     const viewports = config.config.viewports;
     const viewportEntries = Object.entries(viewports);
+    const totalRuns = workflowNames.length * viewportEntries.length;
+    let runIndex = 0;
 
     for (const workflowName of workflowNames) {
       const workflow = config.workflows.get(workflowName);
@@ -115,6 +117,7 @@ export async function runEngine(opts: EngineOptions): Promise<CheckpointResult[]
       }
 
       for (const [vpName, vpSize] of viewportEntries) {
+        runIndex++;
         const context = await createContext(browser, vpSize);
         const page = await createPage(context);
 
@@ -141,7 +144,7 @@ export async function runEngine(opts: EngineOptions): Promise<CheckpointResult[]
             await page.evaluate(() => window.scrollTo(0, 0));
           }
 
-          printProgress(workflowName, vpName, i + 1, resolvedSteps.length);
+          printProgress(runIndex, totalRuns, workflowName, vpName, i + 1, resolvedSteps.length);
           try {
             const result = await executeStep(page, step, stepCtx);
             // Track explicit scroll steps so we don't override intentional scroll positioning
@@ -171,6 +174,8 @@ export async function runEngine(opts: EngineOptions): Promise<CheckpointResult[]
             const message = err instanceof Error ? err.message : String(err);
             const stepSummary = formatStepSummary(stepType, stepData);
             printStepError(
+              runIndex,
+              totalRuns,
               workflowName,
               vpName,
               `step ${i + 1}/${resolvedSteps.length} (${stepType}): ${message}`,
@@ -196,7 +201,7 @@ export async function runEngine(opts: EngineOptions): Promise<CheckpointResult[]
         }
 
         if (!stepFailed) {
-          printStepComplete(workflowName, vpName);
+          printStepComplete(runIndex, totalRuns, workflowName, vpName);
         }
         await context.close();
       }
