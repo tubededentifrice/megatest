@@ -130,7 +130,7 @@ export async function runEngine(opts: EngineOptions): Promise<CheckpointResult[]
           const style = document.createElement('style');
           style.id = '__megatest_deterministic';
           style.textContent =
-            '*, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0s !important; animation-delay: 0s !important; transition-duration: 0s !important; transition-delay: 0s !important; }';
+            '*, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0s !important; animation-delay: 0s !important; transition-duration: 0s !important; transition-delay: 0s !important; caret-color: transparent !important; }';
           (document.head || document.documentElement).appendChild(style);
         });
 
@@ -170,6 +170,17 @@ export async function runEngine(opts: EngineOptions): Promise<CheckpointResult[]
             if (prevStepType !== 'hover') {
               await page.mouse.move(0, 0);
             }
+          }
+
+          // Clear focus state before screenshots to prevent CSS :focus/:focus-visible
+          // effects from leaking into captures (e.g. after fill steps leave inputs focused).
+          if (stepType === 'screenshot') {
+            await page.evaluate(() => {
+              const el = document.activeElement;
+              if (el && el !== document.body) {
+                (el as HTMLElement).blur();
+              }
+            });
           }
 
           printProgress(runIndex, totalRuns, workflowName, vpName, i + 1, resolvedSteps.length);
