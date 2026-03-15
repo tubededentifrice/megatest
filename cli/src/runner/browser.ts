@@ -8,6 +8,7 @@ export async function launchBrowser(): Promise<Browser> {
 export async function createContext(browser: Browser, viewport: Viewport): Promise<BrowserContext> {
   return browser.newContext({
     viewport: { width: viewport.width, height: viewport.height },
+    reducedMotion: 'reduce',
   });
 }
 

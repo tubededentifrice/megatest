@@ -123,6 +123,17 @@ export async function runEngine(opts: EngineOptions): Promise<CheckpointResult[]
         const context = await createContext(browser, vpSize);
         const page = await createPage(context);
 
+        // Disable smooth scrolling and CSS animations for deterministic screenshots.
+        // Uses addInitScript so it persists across navigations automatically.
+        await page.addInitScript(() => {
+          if (document.getElementById('__megatest_deterministic')) return;
+          const style = document.createElement('style');
+          style.id = '__megatest_deterministic';
+          style.textContent =
+            '*, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0s !important; animation-delay: 0s !important; transition-duration: 0s !important; transition-delay: 0s !important; }';
+          (document.head || document.documentElement).appendChild(style);
+        });
+
         const stepCtx: StepContext = {
           baseUrl,
           viewports,
@@ -144,7 +155,7 @@ export async function runEngine(opts: EngineOptions): Promise<CheckpointResult[]
           // Before viewport screenshots, reset scroll to top to ensure deterministic captures.
           // Skip if the user explicitly scrolled (via a scroll step) since the last screenshot.
           if (stepType === 'screenshot' && stepCtx.screenshotMode === 'viewport' && !hasExplicitScroll) {
-            await page.evaluate(() => window.scrollTo(0, 0));
+            await page.evaluate(() => window.scrollTo({ left: 0, top: 0, behavior: 'instant' }));
           }
 
           printProgress(runIndex, totalRuns, workflowName, vpName, i + 1, resolvedSteps.length);

@@ -122,7 +122,10 @@ export async function executeStep(page: Page, step: Step, ctx: StepContext): Pro
       const scrollData = (step as { scroll: { up?: number; down?: number; left?: number; right?: number } }).scroll;
       const x = (scrollData.right || 0) - (scrollData.left || 0);
       const y = (scrollData.down || 0) - (scrollData.up || 0);
-      await page.evaluate(([dx, dy]: [number, number]) => window.scrollBy(dx, dy), [x, y] as [number, number]);
+      await page.evaluate(([dx, dy]: [number, number]) => window.scrollBy({ left: dx, top: dy, behavior: 'instant' }), [
+        x,
+        y,
+      ] as [number, number]);
       return {};
     }
 
