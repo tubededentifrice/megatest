@@ -74,9 +74,14 @@ cd cli && npm install
 npx playwright install chromium
 ```
 
-### No Docker Required
+### Serve Command (Docker)
 
-Unlike many projects, the CLI runs directly on the host. No containers needed for development or testing.
+The `serve` command runs in a Docker container via Traefik. After code changes, rebuild and restart with:
+
+```bash
+cd cli && npm run build
+docker compose up --build -d
+```
 
 ## Specs (Historical Reference Only)
 

@@ -20,7 +20,7 @@ function badgeClass(status: string): string {
     case 'pass':
       return 'badge--pass';
     case 'fail':
-      return 'badge--fail';
+      return 'badge--changed';
     case 'new':
       return 'badge--new';
     case 'error':
@@ -35,11 +35,11 @@ function badgeLabel(status: string): string {
     case 'pass':
       return 'Passed';
     case 'fail':
-      return 'Failed';
+      return 'Changed';
     case 'new':
       return 'New';
     case 'error':
-      return 'Error';
+      return 'Failed';
     default:
       return status;
   }
@@ -50,11 +50,11 @@ function statusColor(status: string): string {
     case 'pass':
       return 'var(--c-pass)';
     case 'fail':
-      return 'var(--c-fail)';
+      return 'var(--c-changed)';
     case 'new':
       return 'var(--c-new)';
     case 'error':
-      return 'var(--c-error)';
+      return 'var(--c-fail)';
     default:
       return 'var(--c-muted)';
   }
@@ -63,7 +63,7 @@ function statusColor(status: string): string {
 function checkpointModifier(status: string): string {
   switch (status) {
     case 'fail':
-      return 'checkpoint--fail';
+      return 'checkpoint--changed';
     case 'new':
       return 'checkpoint--new';
     case 'error':
@@ -107,23 +107,23 @@ function renderFailedCheckpoint(cp: CheckpointResult): string {
             <div class="checkpoint__image-slot">
               <div class="checkpoint__image-label">Baseline</div>
               <div class="checkpoint__image-wrap">
-                <img src="${escapeHtml(baselineSrc)}" alt="Baseline" onclick="openLightbox(this.src, 'Baseline')" class="lightbox-trigger">
+                <img src="${escapeHtml(baselineSrc)}" alt="Baseline — ${escapeHtml(cp.workflow)} — ${escapeHtml(cp.checkpoint)} (${escapeHtml(cp.viewport)})" onclick="openLightbox(this.src, this.alt)" class="lightbox-trigger">
               </div>
             </div>
             <div class="checkpoint__image-slot">
               <div class="checkpoint__image-label">Actual</div>
               <div class="checkpoint__image-wrap">
-                <img src="${escapeHtml(actualSrc)}" alt="Actual" onclick="openLightbox(this.src, 'Actual')" class="lightbox-trigger">
+                <img src="${escapeHtml(actualSrc)}" alt="Actual — ${escapeHtml(cp.workflow)} — ${escapeHtml(cp.checkpoint)} (${escapeHtml(cp.viewport)})" onclick="openLightbox(this.src, this.alt)" class="lightbox-trigger">
               </div>
             </div>
             <div class="checkpoint__image-slot">
               <div class="checkpoint__image-label">Diff</div>
               <div class="checkpoint__image-wrap">
-                <img src="${escapeHtml(diffSrc)}" alt="Diff" onclick="openLightbox(this.src, 'Diff')" class="lightbox-trigger">
+                <img src="${escapeHtml(diffSrc)}" alt="Diff — ${escapeHtml(cp.workflow)} — ${escapeHtml(cp.checkpoint)} (${escapeHtml(cp.viewport)})" onclick="openLightbox(this.src, this.alt)" class="lightbox-trigger">
               </div>
             </div>
           </div>
-          ${cp.error ? `<div class="checkpoint__actions"><span class="text-xs" style="color:var(--c-error)">Error: ${escapeHtml(cp.error)}</span></div>` : ''}
+          ${cp.error ? `<div class="checkpoint__actions"><span class="text-xs" style="color:var(--c-fail)">Error: ${escapeHtml(cp.error)}</span></div>` : ''}
         </div>`;
 }
 
@@ -144,7 +144,7 @@ function renderNewCheckpoint(cp: CheckpointResult): string {
             <div class="checkpoint__image-slot">
               <div class="checkpoint__image-label">Actual</div>
               <div class="checkpoint__image-wrap">
-                <img src="${escapeHtml(actualSrc)}" alt="Actual" onclick="openLightbox(this.src, 'Actual')" class="lightbox-trigger">
+                <img src="${escapeHtml(actualSrc)}" alt="Actual — ${escapeHtml(cp.workflow)} — ${escapeHtml(cp.checkpoint)} (${escapeHtml(cp.viewport)})" onclick="openLightbox(this.src, this.alt)" class="lightbox-trigger">
               </div>
             </div>
             <div class="checkpoint__image-slot" style="display:flex;align-items:center;justify-content:center">
@@ -168,7 +168,7 @@ function renderErrorCheckpoint(cp: CheckpointResult): string {
             </div>
           </div>
           <div class="card__body">
-            <pre class="text-sm" style="color:var(--c-error);white-space:pre-wrap">${escapeHtml(cp.error ?? 'Unknown error')}</pre>
+            <pre class="text-sm" style="color:var(--c-fail);white-space:pre-wrap">${escapeHtml(cp.error ?? 'Unknown error')}</pre>
           </div>
         </div>`;
 }
@@ -193,7 +193,7 @@ function renderPassedRow(cp: CheckpointResult): string {
                   <div class="checkpoint__image-slot">
                     <div class="checkpoint__image-label">Baseline</div>
                     <div class="checkpoint__image-wrap">
-                      <img src="${escapeHtml(baselineSrc)}" alt="Baseline" onclick="openLightbox(this.src, 'Baseline')" class="lightbox-trigger">
+                      <img src="${escapeHtml(baselineSrc)}" alt="Baseline — ${escapeHtml(cp.workflow)} — ${escapeHtml(cp.checkpoint)} (${escapeHtml(cp.viewport)})" onclick="openLightbox(this.src, this.alt)" class="lightbox-trigger">
                     </div>
                   </div>
                 </div>
@@ -220,9 +220,10 @@ const CSS = `/* ============================================================
   --c-pass-bg:   rgba(63,185,80,.15);
   --c-fail:      #f85149;
   --c-fail-bg:   rgba(248,81,73,.15);
-  --c-new:       #d29922;
-  --c-new-bg:    rgba(210,153,34,.15);
-  --c-error:     #f85149;
+  --c-changed:   #d29922;
+  --c-changed-bg:rgba(210,153,34,.15);
+  --c-new:       #58a6ff;
+  --c-new-bg:    rgba(56,139,253,.15);
 
   --sp-xs: 4px;  --sp-sm: 8px;  --sp-md: 16px;  --sp-lg: 24px;  --sp-xl: 32px;  --sp-2xl: 48px;
 
@@ -273,16 +274,18 @@ img { max-width: 100%; display: block; }
   font-size: var(--fs-xs); font-weight: 600;
   border-radius: var(--r-pill); text-transform: uppercase; letter-spacing: .03em;
 }
-.badge--pass  { background: var(--c-pass-bg); color: var(--c-pass); }
-.badge--fail  { background: var(--c-fail-bg); color: var(--c-fail); }
-.badge--new   { background: var(--c-new-bg);  color: var(--c-new); }
-.badge--run   { background: var(--c-accent-bg); color: var(--c-accent); }
-.badge--muted { background: rgba(139,148,158,.15); color: var(--c-muted); }
+.badge--pass    { background: var(--c-pass-bg); color: var(--c-pass); }
+.badge--fail    { background: var(--c-fail-bg); color: var(--c-fail); }
+.badge--changed { background: var(--c-changed-bg); color: var(--c-changed); }
+.badge--new     { background: var(--c-new-bg);  color: var(--c-new); }
+.badge--run     { background: var(--c-accent-bg); color: var(--c-accent); }
+.badge--muted   { background: rgba(139,148,158,.15); color: var(--c-muted); }
 
-.dot       { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-.dot--pass { background: var(--c-pass); }
-.dot--fail { background: var(--c-fail); }
-.dot--new  { background: var(--c-new); }
+.dot         { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.dot--pass   { background: var(--c-pass); }
+.dot--fail   { background: var(--c-fail); }
+.dot--changed{ background: var(--c-changed); }
+.dot--new    { background: var(--c-new); }
 
 /* --- Cards & panels --------------------------------------- */
 .card {
@@ -324,8 +327,9 @@ img { max-width: 100%; display: block; }
   transition: border-color .15s;
 }
 .checkpoint:hover { border-color: rgba(139,148,158,.4); }
-.checkpoint.checkpoint--fail { border-color: rgba(248,81,73,.3); }
-.checkpoint.checkpoint--new  { border-color: rgba(210,153,34,.3); }
+.checkpoint.checkpoint--fail    { border-color: rgba(248,81,73,.3); }
+.checkpoint.checkpoint--changed{ border-color: rgba(210,153,34,.3); }
+.checkpoint.checkpoint--new    { border-color: rgba(56,139,253,.3); }
 
 .checkpoint__header {
   display: flex; align-items: center; gap: var(--sp-sm);
@@ -450,6 +454,21 @@ img { max-width: 100%; display: block; }
   background: none; border: none; line-height: 1;
 }
 .lightbox-close:hover { color: var(--c-text); }
+.lightbox-nav {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  font-size: 36px; color: var(--c-muted); cursor: pointer;
+  background: rgba(0,0,0,.5); border: none; line-height: 1;
+  padding: 12px 16px; border-radius: var(--r-md);
+  transition: color .15s, background .15s;
+  user-select: none;
+}
+.lightbox-nav:hover { color: var(--c-text); background: rgba(255,255,255,.1); }
+.lightbox-nav--prev { left: var(--sp-lg); }
+.lightbox-nav--next { right: var(--sp-lg); }
+.lightbox-counter {
+  font-size: var(--fs-xs); color: var(--c-muted);
+  letter-spacing: .04em;
+}
 `;
 
 export function generateHtmlReport(result: RunResult, reportDir: string, _baselinesDir: string): string {
@@ -530,9 +549,9 @@ ${CSS}
         </div>
         <div class="ml-auto row gap-sm">
           ${result.passed > 0 ? `<span class="badge badge--pass">${result.passed} passed</span>` : ''}
-          ${result.failed > 0 ? `<span class="badge badge--fail">${result.failed} failed</span>` : ''}
+          ${result.failed > 0 ? `<span class="badge badge--changed">${result.failed} changed</span>` : ''}
           ${result.newCount > 0 ? `<span class="badge badge--new">${result.newCount} new</span>` : ''}
-          ${result.errors > 0 ? `<span class="badge badge--fail">${result.errors} error${result.errors !== 1 ? 's' : ''}</span>` : ''}
+          ${result.errors > 0 ? `<span class="badge badge--fail">${result.errors} failed</span>` : ''}
         </div>
       </div>
     </div>
@@ -540,8 +559,9 @@ ${CSS}
     <!-- Filters -->
     <div class="filters" style="background:var(--c-surface);border-bottom:1px solid var(--c-border)">
       <button class="filter-chip active" data-filter="all" onclick="setFilter('all')">All <span class="text-xs">(${total})</span></button>
-      ${failed.length + errorCps.length > 0 ? `<button class="filter-chip" data-filter="fail" onclick="setFilter('fail')">Failed <span class="text-xs">(${failed.length + errorCps.length})</span></button>` : ''}
+      ${failed.length > 0 ? `<button class="filter-chip" data-filter="fail" onclick="setFilter('fail')">Changed <span class="text-xs">(${failed.length})</span></button>` : ''}
       ${newCps.length > 0 ? `<button class="filter-chip" data-filter="new" onclick="setFilter('new')">New <span class="text-xs">(${newCps.length})</span></button>` : ''}
+      ${errorCps.length > 0 ? `<button class="filter-chip" data-filter="error" onclick="setFilter('error')">Failed <span class="text-xs">(${errorCps.length})</span></button>` : ''}
       ${passed.length > 0 ? `<button class="filter-chip" data-filter="pass" onclick="setFilter('pass')">Passed <span class="text-xs">(${passed.length})</span></button>` : ''}
     </div>
 
@@ -559,8 +579,11 @@ ${passedSection}
 <!-- Lightbox overlay -->
 <div class="lightbox-overlay" id="lightbox" onclick="closeLightbox(event)">
   <button class="lightbox-close" onclick="closeLightbox(event)">&times;</button>
+  <button class="lightbox-nav lightbox-nav--prev" id="lightbox-prev" onclick="navLightbox(event,-1)">&#8249;</button>
+  <button class="lightbox-nav lightbox-nav--next" id="lightbox-next" onclick="navLightbox(event,1)">&#8250;</button>
   <img id="lightbox-img" src="" alt="">
   <div class="lightbox-label" id="lightbox-label"></div>
+  <div class="lightbox-counter" id="lightbox-counter"></div>
 </div>
 
 <script>
@@ -576,8 +599,9 @@ function setFilter(status) {
     if (status === 'all') {
       el.style.display = '';
     } else if (status === 'fail') {
-      // Show both fail and error statuses
-      el.style.display = (elStatus === 'fail' || elStatus === 'error') ? '' : 'none';
+      el.style.display = (elStatus === 'fail') ? '' : 'none';
+    } else if (status === 'error') {
+      el.style.display = (elStatus === 'error') ? '' : 'none';
     } else {
       el.style.display = (elStatus === status) ? '' : 'none';
     }
@@ -608,26 +632,61 @@ function togglePassedRow(id) {
   }
 }
 
+// Build lightbox image list from all triggers on the page
+var lbItems = [];
+var lbIndex = 0;
+
+function buildLightboxItems() {
+  lbItems = [];
+  document.querySelectorAll('.lightbox-trigger').forEach(function(img) {
+    lbItems.push({ src: img.src, label: img.alt || '' });
+  });
+}
+
+function updateLightboxNav() {
+  var counter = document.getElementById('lightbox-counter');
+  counter.textContent = (lbIndex + 1) + ' / ' + lbItems.length;
+}
+
 function openLightbox(src, label) {
-  var overlay = document.getElementById('lightbox');
-  var img = document.getElementById('lightbox-img');
-  var lbl = document.getElementById('lightbox-label');
-  img.src = src;
-  lbl.textContent = label;
-  overlay.classList.add('open');
+  buildLightboxItems();
+  // Find the index of the clicked image
+  for (var i = 0; i < lbItems.length; i++) {
+    if (lbItems[i].src === src) { lbIndex = i; break; }
+  }
+  showLightboxImage();
+  document.getElementById('lightbox').classList.add('open');
   document.body.style.overflow = 'hidden';
 }
 
+function showLightboxImage() {
+  var item = lbItems[lbIndex];
+  document.getElementById('lightbox-img').src = item.src;
+  document.getElementById('lightbox-label').textContent = item.label;
+  updateLightboxNav();
+}
+
+function navLightbox(e, dir) {
+  e.stopPropagation();
+  if (lbItems.length === 0) return;
+  lbIndex = (lbIndex + dir + lbItems.length) % lbItems.length;
+  showLightboxImage();
+}
+
 function closeLightbox(e) {
-  // Don't close when clicking the image itself
-  if (e && e.target && e.target.id === 'lightbox-img') return;
+  // Don't close when clicking the image or nav buttons
+  if (e && e.target && (e.target.id === 'lightbox-img' || e.target.classList.contains('lightbox-nav'))) return;
   var overlay = document.getElementById('lightbox');
   overlay.classList.remove('open');
   document.body.style.overflow = '';
 }
 
 document.addEventListener('keydown', function(e) {
+  var overlay = document.getElementById('lightbox');
+  if (!overlay.classList.contains('open')) return;
   if (e.key === 'Escape') closeLightbox(null);
+  if (e.key === 'ArrowLeft') navLightbox(e, -1);
+  if (e.key === 'ArrowRight') navLightbox(e, 1);
 });
 </script>
 

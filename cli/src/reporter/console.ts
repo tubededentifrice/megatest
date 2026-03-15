@@ -26,9 +26,9 @@ export function printSummary(result: RunResult): void {
   console.log('');
 
   if (result.passed > 0) console.log(`  \u2713 ${result.passed} passed`);
-  if (result.failed > 0) console.log(`  \u2717 ${result.failed} failed`);
+  if (result.failed > 0) console.log(`  \u2717 ${result.failed} changed`);
   if (result.newCount > 0) console.log(`  \u25CF ${result.newCount} new`);
-  if (result.errors > 0) console.log(`  ! ${result.errors} errors`);
+  if (result.errors > 0) console.log(`  ! ${result.errors} failed`);
 
   console.log('');
 

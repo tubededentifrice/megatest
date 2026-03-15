@@ -185,28 +185,16 @@ function formatDuration(ms: number): string {
   return `${min}m ${remSec}s`;
 }
 
-function formatDate(dateStr: string): string {
-  try {
-    const d = new Date(dateStr);
-    return d.toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    });
-  } catch {
-    return dateStr;
-  }
+function timeTag(dateStr: string): string {
+  return `<time data-ts="${escapeHtml(dateStr)}"></time>`;
 }
 
 function renderBadges(meta: ReportMeta): string {
   const parts: string[] = [];
   if (meta.passed > 0) parts.push(`<span class="badge badge--pass">${meta.passed} passed</span>`);
-  if (meta.failed > 0) parts.push(`<span class="badge badge--fail">${meta.failed} failed</span>`);
+  if (meta.failed > 0) parts.push(`<span class="badge badge--changed">${meta.failed} changed</span>`);
   if (meta.newCount > 0) parts.push(`<span class="badge badge--new">${meta.newCount} new</span>`);
-  if (meta.errors > 0)
-    parts.push(`<span class="badge badge--fail">${meta.errors} error${meta.errors !== 1 ? 's' : ''}</span>`);
+  if (meta.errors > 0) parts.push(`<span class="badge badge--fail">${meta.errors} failed</span>`);
   return parts.join(' ');
 }
 
@@ -217,7 +205,7 @@ function renderLatestReport(report: ReportEntry): string {
       <a href="${escapeHtml(report.reportUrl)}" class="latest-report">
         <div class="latest-report__header">
           <span class="mono" style="font-size:var(--fs-lg);font-weight:600">${escapeHtml(report.commitHash)}</span>
-          <span class="muted">${formatDate(meta.timestamp)}</span>
+          <span class="muted">${timeTag(meta.timestamp)}</span>
           <span class="muted">${formatDuration(meta.duration)}</span>
         </div>
         <div class="latest-report__badges">
@@ -231,13 +219,13 @@ function renderLatestReport(report: ReportEntry): string {
     <a href="${escapeHtml(report.reportUrl)}" class="latest-report">
       <div class="latest-report__header">
         <span class="mono" style="font-size:var(--fs-lg);font-weight:600">${escapeHtml(report.commitHash)}</span>
-        <span class="muted">${report.mtime.toLocaleString()}</span>
+        <span class="muted">${timeTag(report.mtime.toISOString())}</span>
       </div>
     </a>`;
 }
 
 function renderOlderReport(report: ReportEntry): string {
-  const dateStr = report.meta ? formatDate(report.meta.timestamp) : report.mtime.toLocaleString();
+  const dateStr = report.meta ? timeTag(report.meta.timestamp) : timeTag(report.mtime.toISOString());
   const badges = report.meta ? renderBadges(report.meta) : '';
 
   return `
@@ -329,6 +317,15 @@ ${DASHBOARD_CSS}
       </div>
     </div>
   </div>
+  <script>
+    document.querySelectorAll('time[data-ts]').forEach(el => {
+      const d = new Date(el.dataset.ts);
+      if (!isNaN(d)) el.textContent = d.toLocaleString(undefined, {
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false
+      });
+      else el.textContent = el.dataset.ts;
+    });
+  </script>
 </body>
 </html>`;
 }
@@ -352,8 +349,10 @@ const DASHBOARD_CSS = `
   --c-pass-bg:   rgba(63,185,80,.15);
   --c-fail:      #f85149;
   --c-fail-bg:   rgba(248,81,73,.15);
-  --c-new:       #d29922;
-  --c-new-bg:    rgba(210,153,34,.15);
+  --c-changed:   #d29922;
+  --c-changed-bg:rgba(210,153,34,.15);
+  --c-new:       #58a6ff;
+  --c-new-bg:    rgba(56,139,253,.15);
 
   --sp-xs: 4px;  --sp-sm: 8px;  --sp-md: 16px;  --sp-lg: 24px;  --sp-xl: 32px;  --sp-2xl: 48px;
 
@@ -396,10 +395,11 @@ a:hover { text-decoration: underline; }
   font-size: var(--fs-xs); font-weight: 600;
   border-radius: var(--r-pill); text-transform: uppercase; letter-spacing: .03em;
 }
-.badge--pass  { background: var(--c-pass-bg); color: var(--c-pass); }
-.badge--fail  { background: var(--c-fail-bg); color: var(--c-fail); }
-.badge--new   { background: var(--c-new-bg);  color: var(--c-new); }
-.badge--muted { background: rgba(139,148,158,.15); color: var(--c-muted); }
+.badge--pass    { background: var(--c-pass-bg); color: var(--c-pass); }
+.badge--fail    { background: var(--c-fail-bg); color: var(--c-fail); }
+.badge--changed { background: var(--c-changed-bg); color: var(--c-changed); }
+.badge--new     { background: var(--c-new-bg);  color: var(--c-new); }
+.badge--muted   { background: rgba(139,148,158,.15); color: var(--c-muted); }
 
 .card {
   background: var(--c-surface);
