@@ -4,9 +4,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./serve.config.yml:/app/serve.config.yml:ro
-      # Mount project directories so they're accessible at the paths in serve.config.yml
-      # Example: if your config has path: /data/fj2, mount the repo there
-      # - /home/ubuntu/git/fj2:/data/fj2:ro
+      - /home/ubuntu/git/fj2/.megatest:/data/fj2/.megatest:ro
     networks:
       - traefik-proxy
     labels:
