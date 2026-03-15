@@ -5,11 +5,18 @@ export function printProgress(workflow: string, viewport: string, step: number, 
 }
 
 export function printStepComplete(workflow: string, viewport: string): void {
+  // Clear the progress line before printing completion
+  process.stdout.write('\r\x1b[K');
   console.log(`  \u2713 ${workflow} [${viewport}]`);
 }
 
-export function printStepError(workflow: string, viewport: string, error: string): void {
+export function printStepError(workflow: string, viewport: string, error: string, stepDetail?: string): void {
+  // Clear the progress line before printing error
+  process.stdout.write('\r\x1b[K');
   console.error(`  \u2717 ${workflow} [${viewport}]: ${error}`);
+  if (stepDetail) {
+    console.error(`    step: ${stepDetail}`);
+  }
 }
 
 export function printSummary(result: RunResult): void {

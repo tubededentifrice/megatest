@@ -73,7 +73,17 @@ export async function executeStep(page: Page, step: Step, ctx: StepContext): Pro
     case 'fill': {
       const fillData = (step as unknown as { fill: Record<string, unknown> }).fill;
       const { value, ...loc } = fillData;
-      await resolveLocator(page, loc).fill(value as string, { timeout });
+      if (value === undefined) {
+        const keys = Object.keys(fillData).join(', ');
+        throw new Error(
+          `fill step is missing "value" field (got keys: ${keys}). ` +
+            `Expected: fill: { <locator>, value: "text to type" }`,
+        );
+      }
+      if (typeof value !== 'string') {
+        throw new Error(`fill step "value" must be a string, got ${typeof value}: ${JSON.stringify(value)}`);
+      }
+      await resolveLocator(page, loc).fill(value, { timeout });
       return {};
     }
 
@@ -86,7 +96,17 @@ export async function executeStep(page: Page, step: Step, ctx: StepContext): Pro
     case 'select': {
       const selectData = (step as unknown as { select: Record<string, unknown> }).select;
       const { value, ...loc } = selectData;
-      await resolveLocator(page, loc).selectOption(value as string, { timeout });
+      if (value === undefined) {
+        const keys = Object.keys(selectData).join(', ');
+        throw new Error(
+          `select step is missing "value" field (got keys: ${keys}). ` +
+            `Expected: select: { <locator>, value: "option to select" }`,
+        );
+      }
+      if (typeof value !== 'string') {
+        throw new Error(`select step "value" must be a string, got ${typeof value}: ${JSON.stringify(value)}`);
+      }
+      await resolveLocator(page, loc).selectOption(value, { timeout });
       return {};
     }
 

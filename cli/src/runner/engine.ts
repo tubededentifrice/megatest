@@ -6,6 +6,28 @@ import type { CheckpointResult } from '../types.js';
 import { createContext, createPage, launchBrowser } from './browser.js';
 import { type StepContext, executeStep } from './steps.js';
 
+/** Format step data as a compact string for error context */
+function formatStepSummary(stepType: string, stepData: unknown): string {
+  if (stepData === undefined || stepData === null) return stepType;
+  if (typeof stepData === 'string' || typeof stepData === 'number') {
+    return `${stepType}: ${stepData}`;
+  }
+  if (typeof stepData === 'object') {
+    const parts: string[] = [];
+    for (const [k, v] of Object.entries(stepData as Record<string, unknown>)) {
+      if (typeof v === 'string') {
+        // Truncate long values
+        const display = v.length > 60 ? `${v.slice(0, 57)}...` : v;
+        parts.push(`${k}: "${display}"`);
+      } else if (v !== undefined) {
+        parts.push(`${k}: ${JSON.stringify(v)}`);
+      }
+    }
+    return `${stepType}: { ${parts.join(', ')} }`;
+  }
+  return `${stepType}: ${JSON.stringify(stepData)}`;
+}
+
 export interface EngineOptions {
   config: LoadedConfig;
   baseUrl: string;
@@ -102,6 +124,7 @@ export async function runEngine(opts: EngineOptions): Promise<CheckpointResult[]
         for (let i = 0; i < resolvedSteps.length; i++) {
           const step = resolvedSteps[i];
           const stepType = Object.keys(step)[0];
+          const stepData = (step as unknown as Record<string, unknown>)[stepType];
 
           // Before viewport screenshots, reset scroll to top to ensure deterministic captures.
           // Skip if the user explicitly scrolled (via a scroll step) since the last screenshot.
@@ -137,7 +160,13 @@ export async function runEngine(opts: EngineOptions): Promise<CheckpointResult[]
             }
           } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
-            printStepError(workflowName, vpName, message);
+            const stepSummary = formatStepSummary(stepType, stepData);
+            printStepError(
+              workflowName,
+              vpName,
+              `step ${i + 1}/${resolvedSteps.length} (${stepType}): ${message}`,
+              stepSummary,
+            );
             results.push({
               workflow: workflowName,
               checkpoint: `step-${i + 1}-error`,
@@ -150,7 +179,7 @@ export async function runEngine(opts: EngineOptions): Promise<CheckpointResult[]
               baselinePath: null,
               actualPath: null,
               diffPath: null,
-              error: `Step ${i + 1} failed: ${message}`,
+              error: `Step ${i + 1} (${stepType}) failed: ${message}`,
             });
             stepFailed = true;
             break; // Skip remaining steps in this workflow/viewport pair
