@@ -136,7 +136,7 @@ steps:
 | `wait` | `wait: 500` | Wait milliseconds |
 | `screenshot` | `screenshot: page-name` | Take screenshot checkpoint |
 | `click` | `click: { role: "button", name: "Sign in" }` | Click element |
-| `fill` | `fill: { label: "Email", text: "${TEST_USER}" }` | Fill form field |
+| `fill` | `fill: { label: "Email", value: "${TEST_USER}" }` | Fill form field |
 | `hover` | `hover: { testid: "menu-trigger" }` | Hover over element |
 | `select` | `select: { label: "Country", value: "FR" }` | Select dropdown option |
 | `press` | `press: "Enter"` | Press keyboard key |
@@ -165,8 +165,8 @@ If authentication is needed, create `includes/login.yml`:
 name: login
 steps:
   - open: /login
-  - fill: { label: "Email", text: "${TEST_USER}" }
-  - fill: { label: "Password", text: "${TEST_PASS}" }
+  - fill: { label: "Email", value: "${TEST_USER}" }
+  - fill: { label: "Password", value: "${TEST_PASS}" }
   - click: { role: "button", name: "Sign in" }
   - wait: 1000
 ```
