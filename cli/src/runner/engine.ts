@@ -1,10 +1,10 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import { LoadedConfig, Step, Workflow, Include } from '../config/schema.js';
-import { CheckpointResult } from '../types.js';
-import { launchBrowser, createContext, createPage } from './browser.js';
-import { executeStep, StepContext } from './steps.js';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { type Include, type LoadedConfig, type Step, Workflow } from '../config/schema.js';
 import { printProgress, printStepComplete, printStepError } from '../reporter/console.js';
+import type { CheckpointResult } from '../types.js';
+import { createContext, createPage, launchBrowser } from './browser.js';
+import { type StepContext, executeStep } from './steps.js';
 
 export interface EngineOptions {
   config: LoadedConfig;
@@ -14,11 +14,7 @@ export interface EngineOptions {
 }
 
 // Resolve includes: expand include steps inline, detect circular refs
-function resolveIncludes(
-  steps: Step[],
-  includes: Map<string, Include>,
-  visited: Set<string> = new Set(),
-): Step[] {
+function resolveIncludes(steps: Step[], includes: Map<string, Include>, visited: Set<string> = new Set()): Step[] {
   const resolved: Step[] = [];
   for (const step of steps) {
     if ('include' in step) {

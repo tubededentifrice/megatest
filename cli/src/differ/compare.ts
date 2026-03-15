@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import * as fs from 'node:fs';
 import { PNG } from 'pngjs';
 
 export interface CompareResult {
@@ -12,7 +12,7 @@ export async function compareScreenshots(
   baselinePath: string,
   actualPath: string,
   diffOutputPath: string,
-  threshold: number  // pixelmatch per-pixel threshold (0-1), NOT the megatest percentage threshold
+  threshold: number, // pixelmatch per-pixel threshold (0-1), NOT the megatest percentage threshold
 ): Promise<CompareResult> {
   // pixelmatch v6 is ESM-only; use dynamic import for CJS compatibility
   const pixelmatch = (await import('pixelmatch')).default;
@@ -34,14 +34,7 @@ export async function compareScreenshots(
   const diff = new PNG({ width, height });
   const totalPixels = width * height;
 
-  const diffPixels = pixelmatch(
-    baselinePng.data,
-    actualPng.data,
-    diff.data,
-    width,
-    height,
-    { threshold }
-  );
+  const diffPixels = pixelmatch(baselinePng.data, actualPng.data, diff.data, width, height, { threshold });
 
   // Write diff image
   fs.writeFileSync(diffOutputPath, PNG.sync.write(diff));

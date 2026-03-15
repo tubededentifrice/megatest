@@ -6,8 +6,8 @@ export async function runValidate(repoPath: string): Promise<number> {
     const config = loadConfig(repoPath);
     const errors = validate(config);
 
-    const errs = errors.filter(e => e.severity === 'error');
-    const warns = errors.filter(e => e.severity === 'warning');
+    const errs = errors.filter((e) => e.severity === 'error');
+    const warns = errors.filter((e) => e.severity === 'warning');
 
     // Print results per file
     if (errs.length === 0) {
@@ -38,10 +38,9 @@ export async function runValidate(repoPath: string): Promise<number> {
     if (errs.length === 0) {
       console.log(`\nConfiguration valid (${totalFiles} files, ${errs.length} errors, ${warns.length} warnings)`);
       return 0;
-    } else {
-      console.error(`\nConfiguration invalid (${totalFiles} files, ${errs.length} errors, ${warns.length} warnings)`);
-      return 1;
     }
+    console.error(`\nConfiguration invalid (${totalFiles} files, ${errs.length} errors, ${warns.length} warnings)`);
+    return 1;
   } catch (err: any) {
     console.error(`Error: ${err.message}`);
     return 1;

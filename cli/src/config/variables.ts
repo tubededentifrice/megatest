@@ -37,10 +37,7 @@ export function interpolateVariables(
 /**
  * Recursively interpolates all string values in a step.
  */
-export function interpolateStep(
-  step: Step,
-  variables: Record<string, string>,
-): { step: Step; warnings: string[] } {
+export function interpolateStep(step: Step, variables: Record<string, string>): { step: Step; warnings: string[] } {
   const allWarnings: string[] = [];
 
   function interpolateValue(value: unknown): unknown {
@@ -83,10 +80,7 @@ export function interpolateWorkflow(
   }
 
   // Interpolate name and description too
-  const { result: name, warnings: nameWarnings } = interpolateVariables(
-    workflow.name,
-    variables,
-  );
+  const { result: name, warnings: nameWarnings } = interpolateVariables(workflow.name, variables);
   allWarnings.push(...nameWarnings);
 
   let description = workflow.description;

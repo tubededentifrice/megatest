@@ -3,10 +3,7 @@ import { runValidate } from './commands/validate.js';
 
 const program = new Command();
 
-program
-  .name('megatest')
-  .description('Visual regression testing CLI')
-  .version('0.1.0');
+program.name('megatest').description('Visual regression testing CLI').version('0.1.0');
 
 program
   .command('validate')

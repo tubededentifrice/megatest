@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+# ============================================================================
+# Biome Checks (format + lint staged TypeScript files)
+# ============================================================================
+
+# Skip if biome is not installed
+if [[ ! -d "cli/node_modules/@biomejs" ]]; then
+  echo "pre-commit: biome not installed, skipping (run: cd cli && npm install)" >&2
+  exit 0
+fi
+
+# Get staged .ts files
+STAGED_TS=$(git diff --cached --name-only --diff-filter=ACM | grep '\.ts$' || true)
+
+if [ -z "$STAGED_TS" ]; then
+  exit 0
+fi
+
+echo "pre-commit: formatting staged TypeScript files..."
+echo "$STAGED_TS" | xargs npx --prefix cli biome format --write >/dev/null 2>&1
+
+# Re-stage formatted files
+echo "$STAGED_TS" | xargs git add
+
+echo "pre-commit: linting staged TypeScript files..."
+echo "$STAGED_TS" | xargs npx --prefix cli biome lint || exit 1

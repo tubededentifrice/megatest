@@ -1,4 +1,4 @@
-import { RunResult } from '../types.js';
+import type { RunResult } from '../types.js';
 
 export function printProgress(workflow: string, viewport: string, step: number, totalSteps: number): void {
   process.stdout.write(`\r  ${workflow} [${viewport}] step ${step}/${totalSteps}`);

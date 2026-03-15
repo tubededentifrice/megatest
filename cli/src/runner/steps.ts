@@ -1,6 +1,6 @@
-import { Page } from 'playwright';
-import * as path from 'path';
-import { Step, Viewport } from '../config/schema.js';
+import * as path from 'node:path';
+import type { Page } from 'playwright';
+import type { Step, Viewport } from '../config/schema.js';
 import { resolveLocator } from './locator.js';
 
 export interface StepContext {
@@ -30,14 +30,17 @@ export async function executeStep(page: Page, step: Step, ctx: StepContext): Pro
     case 'open': {
       const urlPath = (step as { open: string }).open;
       const fullUrl = urlPath.startsWith('http') ? urlPath : ctx.baseUrl.replace(/\/$/, '') + urlPath;
-      const waitUntil = ctx.waitAfterNavigation === 'networkidle' ? 'networkidle' as const
-        : ctx.waitAfterNavigation === 'load' ? 'load' as const
-        : 'load' as const;
+      const waitUntil =
+        ctx.waitAfterNavigation === 'networkidle'
+          ? ('networkidle' as const)
+          : ctx.waitAfterNavigation === 'load'
+            ? ('load' as const)
+            : ('load' as const);
       await page.goto(fullUrl, { waitUntil, timeout });
       // If waitAfterNavigation is a ms number, also wait
       if (ctx.waitAfterNavigation !== 'networkidle' && ctx.waitAfterNavigation !== 'load') {
-        const ms = parseInt(ctx.waitAfterNavigation, 10);
-        if (!isNaN(ms) && ms > 0) {
+        const ms = Number.parseInt(ctx.waitAfterNavigation, 10);
+        if (!Number.isNaN(ms) && ms > 0) {
           await page.waitForTimeout(ms);
         }
       }

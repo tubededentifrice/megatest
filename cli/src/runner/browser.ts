@@ -1,5 +1,5 @@
-import { chromium, Browser, BrowserContext, Page } from 'playwright';
-import { Viewport } from '../config/schema.js';
+import { type Browser, type BrowserContext, type Page, chromium } from 'playwright';
+import type { Viewport } from '../config/schema.js';
 
 export async function launchBrowser(): Promise<Browser> {
   return chromium.launch({ headless: true });

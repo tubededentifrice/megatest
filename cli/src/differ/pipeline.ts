@@ -1,18 +1,18 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import { CheckpointResult } from '../types.js';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import type { CheckpointResult } from '../types.js';
 import { compareScreenshots } from './compare.js';
 
 export interface DiffPipelineOptions {
-  baselinesDir: string;   // .megatest/baselines/
-  actualsDir: string;     // .megatest/actuals/
-  reportDir: string;      // .megatest/reports/<commit>/
-  threshold: number;      // megatest percentage threshold (e.g., 0.1 means 0.1%)
+  baselinesDir: string; // .megatest/baselines/
+  actualsDir: string; // .megatest/actuals/
+  reportDir: string; // .megatest/reports/<commit>/
+  threshold: number; // megatest percentage threshold (e.g., 0.1 means 0.1%)
 }
 
 export async function runDiffPipeline(
   results: CheckpointResult[],
-  opts: DiffPipelineOptions
+  opts: DiffPipelineOptions,
 ): Promise<CheckpointResult[]> {
   const { baselinesDir, reportDir, threshold } = opts;
 
@@ -55,7 +55,7 @@ export async function runDiffPipeline(
       baselinePath,
       result.actualPath,
       diffOutputPath,
-      0.1  // pixelmatch per-pixel threshold (NOT the megatest percentage threshold)
+      0.1, // pixelmatch per-pixel threshold (NOT the megatest percentage threshold)
     );
 
     if (comparison.dimensionMismatch) {

@@ -1,14 +1,15 @@
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { loadConfig } from '../config/loader.js';
-import { validate, ValidationError } from '../config/validator.js';
+import type { LoadedConfig } from '../config/schema.js';
+import { ValidationError, validate } from '../config/validator.js';
 import { interpolateWorkflow } from '../config/variables.js';
-import { runEngine } from '../runner/engine.js';
 import { runDiffPipeline } from '../differ/pipeline.js';
-import { generateHtmlReport } from '../reporter/html.js';
 import { printSummary } from '../reporter/console.js';
-import { getCommitHash, ensureGitignore, resolveMegatestDir } from '../utils.js';
-import { RunResult } from '../types.js';
+import { generateHtmlReport } from '../reporter/html.js';
+import { runEngine } from '../runner/engine.js';
+import type { CheckpointResult, RunResult } from '../types.js';
+import { ensureGitignore, getCommitHash, resolveMegatestDir } from '../utils.js';
 
 export interface RunOptions {
   repo: string;
@@ -30,7 +31,7 @@ export async function runRun(opts: RunOptions): Promise<number> {
 
   // 2. Load and validate config
   console.log('Loading configuration...');
-  let config;
+  let config: LoadedConfig;
   try {
     config = loadConfig(repo);
   } catch (err: any) {
@@ -39,7 +40,7 @@ export async function runRun(opts: RunOptions): Promise<number> {
   }
 
   const errors = validate(config);
-  const errs = errors.filter(e => e.severity === 'error');
+  const errs = errors.filter((e) => e.severity === 'error');
   if (errs.length > 0) {
     console.error('Configuration errors:');
     for (const e of errs) {
@@ -74,6 +75,7 @@ export async function runRun(opts: RunOptions): Promise<number> {
     }
     workflowNames = plan.workflows;
   } else if (config.plans.has('default')) {
+    // biome-ignore lint/style/noNonNullAssertion: guarded by .has() above
     workflowNames = config.plans.get('default')!.workflows;
   } else {
     workflowNames = Array.from(config.workflows.keys());
@@ -98,7 +100,7 @@ export async function runRun(opts: RunOptions): Promise<number> {
 
   // 6. Run Playwright engine
   console.log('Launching browser...');
-  let results;
+  let results: CheckpointResult[];
   try {
     results = await runEngine({
       config,
@@ -125,10 +127,10 @@ export async function runRun(opts: RunOptions): Promise<number> {
     commitHash,
     timestamp: new Date().toISOString(),
     checkpoints: results,
-    passed: results.filter(r => r.status === 'pass').length,
-    failed: results.filter(r => r.status === 'fail').length,
-    newCount: results.filter(r => r.status === 'new').length,
-    errors: results.filter(r => r.status === 'error').length,
+    passed: results.filter((r) => r.status === 'pass').length,
+    failed: results.filter((r) => r.status === 'fail').length,
+    newCount: results.filter((r) => r.status === 'new').length,
+    errors: results.filter((r) => r.status === 'error').length,
     duration: Date.now() - startTime,
   };
 
@@ -140,5 +142,5 @@ export async function runRun(opts: RunOptions): Promise<number> {
   printSummary(runResult);
 
   // 11. Exit code
-  return (runResult.failed > 0 || runResult.newCount > 0 || runResult.errors > 0) ? 1 : 0;
+  return runResult.failed > 0 || runResult.newCount > 0 || runResult.errors > 0 ? 1 : 0;
 }

@@ -1,13 +1,9 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import { CheckpointResult, ReportMeta, RunResult } from '../types.js';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import type { CheckpointResult, ReportMeta, RunResult } from '../types.js';
 
 function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 function formatNumber(n: number): string {
@@ -21,40 +17,59 @@ function formatDiffPercent(pct: number | null): string {
 
 function badgeClass(status: string): string {
   switch (status) {
-    case 'pass': return 'badge--pass';
-    case 'fail': return 'badge--fail';
-    case 'new': return 'badge--new';
-    case 'error': return 'badge--fail';
-    default: return 'badge--muted';
+    case 'pass':
+      return 'badge--pass';
+    case 'fail':
+      return 'badge--fail';
+    case 'new':
+      return 'badge--new';
+    case 'error':
+      return 'badge--fail';
+    default:
+      return 'badge--muted';
   }
 }
 
 function badgeLabel(status: string): string {
   switch (status) {
-    case 'pass': return 'Passed';
-    case 'fail': return 'Failed';
-    case 'new': return 'New';
-    case 'error': return 'Error';
-    default: return status;
+    case 'pass':
+      return 'Passed';
+    case 'fail':
+      return 'Failed';
+    case 'new':
+      return 'New';
+    case 'error':
+      return 'Error';
+    default:
+      return status;
   }
 }
 
 function statusColor(status: string): string {
   switch (status) {
-    case 'pass': return 'var(--c-pass)';
-    case 'fail': return 'var(--c-fail)';
-    case 'new': return 'var(--c-new)';
-    case 'error': return 'var(--c-error)';
-    default: return 'var(--c-muted)';
+    case 'pass':
+      return 'var(--c-pass)';
+    case 'fail':
+      return 'var(--c-fail)';
+    case 'new':
+      return 'var(--c-new)';
+    case 'error':
+      return 'var(--c-error)';
+    default:
+      return 'var(--c-muted)';
   }
 }
 
 function checkpointModifier(status: string): string {
   switch (status) {
-    case 'fail': return 'checkpoint--fail';
-    case 'new': return 'checkpoint--new';
-    case 'error': return 'checkpoint--fail';
-    default: return '';
+    case 'fail':
+      return 'checkpoint--fail';
+    case 'new':
+      return 'checkpoint--new';
+    case 'error':
+      return 'checkpoint--fail';
+    default:
+      return '';
   }
 }
 
@@ -387,27 +402,31 @@ img { max-width: 100%; display: block; }
 `;
 
 export function generateHtmlReport(result: RunResult, reportDir: string, _baselinesDir: string): string {
-  const failed = result.checkpoints.filter(cp => cp.status === 'fail');
-  const newCps = result.checkpoints.filter(cp => cp.status === 'new');
-  const errorCps = result.checkpoints.filter(cp => cp.status === 'error');
-  const passed = result.checkpoints.filter(cp => cp.status === 'pass');
+  const failed = result.checkpoints.filter((cp) => cp.status === 'fail');
+  const newCps = result.checkpoints.filter((cp) => cp.status === 'new');
+  const errorCps = result.checkpoints.filter((cp) => cp.status === 'error');
+  const passed = result.checkpoints.filter((cp) => cp.status === 'pass');
   const total = result.checkpoints.length;
 
   // Build failed/error checkpoints HTML
-  const failedHtml = [...failed, ...errorCps].map(cp => {
-    if (cp.status === 'error') {
-      return renderErrorCheckpoint(cp);
-    }
-    return renderFailedCheckpoint(cp);
-  }).join('\n');
+  const failedHtml = [...failed, ...errorCps]
+    .map((cp) => {
+      if (cp.status === 'error') {
+        return renderErrorCheckpoint(cp);
+      }
+      return renderFailedCheckpoint(cp);
+    })
+    .join('\n');
 
   // Build new checkpoints HTML
-  const newHtml = newCps.map(cp => renderNewCheckpoint(cp)).join('\n');
+  const newHtml = newCps.map((cp) => renderNewCheckpoint(cp)).join('\n');
 
   // Build passed checkpoints HTML
-  const passedRows = passed.map(cp => renderPassedRow(cp)).join('\n');
+  const passedRows = passed.map((cp) => renderPassedRow(cp)).join('\n');
 
-  const passedSection = passed.length > 0 ? `
+  const passedSection =
+    passed.length > 0
+      ? `
         <div class="card" data-status="pass">
           <div class="card__header passed-toggle" onclick="togglePassed()">
             <span class="badge badge--pass">Passed</span>
@@ -417,7 +436,8 @@ export function generateHtmlReport(result: RunResult, reportDir: string, _baseli
           <div class="passed-section__body" id="passed-body">
 ${passedRows}
           </div>
-        </div>` : '';
+        </div>`
+      : '';
 
   const timestamp = result.timestamp;
   const durationSec = (result.duration / 1000).toFixed(1);

@@ -1,6 +1,6 @@
-import { execSync } from 'child_process';
-import * as fs from 'fs';
-import * as path from 'path';
+import { execSync } from 'node:child_process';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 
 export function getCommitHash(repoPath: string): string {
   try {
@@ -35,7 +35,7 @@ export function ensureGitignore(megatestDir: string): void {
   }
 
   const existing = fs.readFileSync(gitignorePath, 'utf-8');
-  const missing = requiredEntries.filter(entry => !existing.split('\n').some(line => line.trim() === entry));
+  const missing = requiredEntries.filter((entry) => !existing.split('\n').some((line) => line.trim() === entry));
   if (missing.length > 0) {
     const suffix = (existing.endsWith('\n') ? '' : '\n') + missing.join('\n') + '\n';
     fs.appendFileSync(gitignorePath, suffix);

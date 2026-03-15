@@ -103,9 +103,12 @@ Before committing:
 
 ```bash
 cd cli && npm run build          # Must compile cleanly (strict mode)
+cd cli && npm run check          # Biome lint + format check (warnings OK, errors fail)
 ```
 
 No test framework is set up yet — rely on manual testing with the CLI commands and TypeScript compiler strictness.
+
+A pre-commit hook auto-formats staged `.ts` files and runs the linter. Install with: `bash scripts/install_git_hooks.sh`
 
 ## Code Style
 

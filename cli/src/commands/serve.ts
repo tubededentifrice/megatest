@@ -1,8 +1,8 @@
-import * as fs from 'fs';
-import * as http from 'http';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as http from 'node:http';
+import * as path from 'node:path';
 import * as yaml from 'js-yaml';
-import { ReportMeta, ServeConfig, ServeProjectConfig } from '../types.js';
+import type { ReportMeta, ServeConfig, ServeProjectConfig } from '../types.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -29,7 +29,7 @@ interface ReportEntry {
 function loadConfig(configPath: string): ServeConfig {
   if (!fs.existsSync(configPath)) {
     console.error(`Config file not found: ${configPath}`);
-    console.error(`Create one from serve.config.sample.yml`);
+    console.error('Create one from serve.config.sample.yml');
     process.exit(1);
   }
 
@@ -104,9 +104,10 @@ function listReports(project: DiscoveredProject): ReportEntry[] {
 
   let dirs: string[];
   try {
-    dirs = fs.readdirSync(project.reportsDir, { withFileTypes: true })
-      .filter(d => d.isDirectory())
-      .map(d => d.name);
+    dirs = fs
+      .readdirSync(project.reportsDir, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name);
   } catch {
     return entries;
   }
@@ -173,11 +174,7 @@ function getMimeType(filePath: string): string {
 // ---------------------------------------------------------------------------
 
 function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 function formatDuration(ms: number): string {
@@ -208,7 +205,8 @@ function renderBadges(meta: ReportMeta): string {
   if (meta.passed > 0) parts.push(`<span class="badge badge--pass">${meta.passed} passed</span>`);
   if (meta.failed > 0) parts.push(`<span class="badge badge--fail">${meta.failed} failed</span>`);
   if (meta.newCount > 0) parts.push(`<span class="badge badge--new">${meta.newCount} new</span>`);
-  if (meta.errors > 0) parts.push(`<span class="badge badge--fail">${meta.errors} error${meta.errors !== 1 ? 's' : ''}</span>`);
+  if (meta.errors > 0)
+    parts.push(`<span class="badge badge--fail">${meta.errors} error${meta.errors !== 1 ? 's' : ''}</span>`);
   return parts.join(' ');
 }
 
@@ -251,11 +249,12 @@ function renderOlderReport(report: ReportEntry): string {
 }
 
 function renderDashboard(title: string, projects: DiscoveredProject[]): string {
-  const projectCards = projects.map(project => {
-    const reports = listReports(project);
+  const projectCards = projects
+    .map((project) => {
+      const reports = listReports(project);
 
-    if (reports.length === 0) {
-      return `
+      if (reports.length === 0) {
+        return `
         <div class="card">
           <div class="card__header">
             <h2>${escapeHtml(project.name)}</h2>
@@ -267,20 +266,21 @@ function renderDashboard(title: string, projects: DiscoveredProject[]): string {
             </div>
           </div>
         </div>`;
-    }
+      }
 
-    const [latest, ...older] = reports;
+      const [latest, ...older] = reports;
 
-    const olderHtml = older.length > 0
-      ? `<div class="older-reports">
+      const olderHtml =
+        older.length > 0
+          ? `<div class="older-reports">
           <div class="older-reports__header muted text-xs">
             ${older.length} older report${older.length !== 1 ? 's' : ''}
           </div>
-          ${older.map(r => renderOlderReport(r)).join('\n')}
+          ${older.map((r) => renderOlderReport(r)).join('\n')}
         </div>`
-      : '';
+          : '';
 
-    return `
+      return `
       <div class="card">
         <div class="card__header">
           <h2>${escapeHtml(project.name)}</h2>
@@ -292,13 +292,15 @@ function renderDashboard(title: string, projects: DiscoveredProject[]): string {
           ${olderHtml}
         </div>
       </div>`;
-  }).join('\n');
+    })
+    .join('\n');
 
-  const noProjects = projects.length === 0
-    ? `<div class="empty" style="padding:var(--sp-2xl)">
+  const noProjects =
+    projects.length === 0
+      ? `<div class="empty" style="padding:var(--sp-2xl)">
         <span class="muted">No projects found. Check your serve.config.yml</span>
       </div>`
-    : '';
+      : '';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -549,8 +551,8 @@ export async function runServe(opts: ServeOptions): Promise<void> {
 
   // CLI flags override config
   if (opts.port) {
-    const parsed = parseInt(opts.port, 10);
-    if (isNaN(parsed) || parsed < 1 || parsed > 65535) {
+    const parsed = Number.parseInt(opts.port, 10);
+    if (Number.isNaN(parsed) || parsed < 1 || parsed > 65535) {
       console.error(`Invalid port: ${opts.port}`);
       process.exit(1);
     }

@@ -15,7 +15,7 @@ declare module 'pixelmatch' {
     output: Uint8Array | Uint8ClampedArray | Buffer | null,
     width: number,
     height: number,
-    options?: PixelmatchOptions
+    options?: PixelmatchOptions,
   ): number;
 
   export default pixelmatch;

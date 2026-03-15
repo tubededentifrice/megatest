@@ -1,5 +1,5 @@
-import * as path from 'node:path';
 import * as fs from 'node:fs';
+import * as path from 'node:path';
 import type { LoadedConfig, Step } from './schema.js';
 
 export interface ValidationError {
@@ -11,8 +11,18 @@ export interface ValidationError {
 const VALID_FILENAME_PATTERN = /^[a-z0-9-]+\.yml$/;
 
 const VALID_STEP_TYPES = new Set([
-  'open', 'wait', 'screenshot', 'click', 'fill', 'hover',
-  'select', 'press', 'scroll', 'eval', 'include', 'set-viewport',
+  'open',
+  'wait',
+  'screenshot',
+  'click',
+  'fill',
+  'hover',
+  'select',
+  'press',
+  'scroll',
+  'eval',
+  'include',
+  'set-viewport',
 ]);
 
 /**
@@ -96,9 +106,7 @@ function getIncludeReferences(steps: Step[]): string[] {
  * Detects circular include dependencies using DFS.
  * Returns a list of cycles found, each described as a string.
  */
-function detectCircularIncludes(
-  config: LoadedConfig,
-): { file: string; message: string }[] {
+function detectCircularIncludes(config: LoadedConfig): { file: string; message: string }[] {
   const cycles: { file: string; message: string }[] = [];
   const visited = new Set<string>();
   const inStack = new Set<string>();

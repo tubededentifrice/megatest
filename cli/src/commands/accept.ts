@@ -1,5 +1,5 @@
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 
 export async function runAccept(repoPath: string, checkpoint?: string): Promise<number> {
   const megatestDir = path.resolve(repoPath, '.megatest');
@@ -12,7 +12,7 @@ export async function runAccept(repoPath: string, checkpoint?: string): Promise<
   }
 
   // Get all PNG files in actuals/
-  const files = fs.readdirSync(actualsDir).filter(f => f.endsWith('.png'));
+  const files = fs.readdirSync(actualsDir).filter((f) => f.endsWith('.png'));
 
   if (files.length === 0) {
     console.log('No screenshots to accept.');
@@ -24,7 +24,7 @@ export async function runAccept(repoPath: string, checkpoint?: string): Promise<
   if (checkpoint) {
     // Checkpoint files are named <checkpoint>-<viewport>.png
     // Extract checkpoint by removing the last -<segment> (viewport name) from the filename
-    toAccept = files.filter(f => {
+    toAccept = files.filter((f) => {
       const withoutExt = f.replace('.png', '');
       const lastDash = withoutExt.lastIndexOf('-');
       if (lastDash === -1) return withoutExt === checkpoint;
