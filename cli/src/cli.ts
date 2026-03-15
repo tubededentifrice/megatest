@@ -41,4 +41,15 @@ program
     process.exit(code);
   });
 
+program
+  .command('serve')
+  .description('Start a report server dashboard')
+  .option('--config <path>', 'Path to serve config file', 'serve.config.yml')
+  .option('--port <number>', 'Port to listen on (overrides config)')
+  .option('--host <address>', 'Host to bind to (overrides config)')
+  .action(async (opts) => {
+    const { runServe } = await import('./commands/serve.js');
+    await runServe(opts);
+  });
+
 program.parse();

@@ -34,3 +34,6 @@ npm-debug.log*
 # Coverage & testing
 coverage/
 .nyc_output/
+
+# Serve config (contains local paths)
+serve.config.yml

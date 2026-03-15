@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { CheckpointResult, RunResult } from '../types.js';
+import { CheckpointResult, ReportMeta, RunResult } from '../types.js';
 
 function escapeHtml(str: string): string {
   return str
@@ -527,6 +527,18 @@ function togglePassed() {
 
   const outputPath = path.join(reportDir, 'index.html');
   fs.writeFileSync(outputPath, html, 'utf-8');
+
+  const meta: ReportMeta = {
+    commitHash: result.commitHash,
+    timestamp: result.timestamp,
+    passed: result.passed,
+    failed: result.failed,
+    newCount: result.newCount,
+    errors: result.errors,
+    duration: result.duration,
+    totalCheckpoints: result.checkpoints.length,
+  };
+  fs.writeFileSync(path.join(reportDir, 'meta.json'), JSON.stringify(meta, null, 2));
 
   return outputPath;
 }

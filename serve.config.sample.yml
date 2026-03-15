@@ -1,0 +1,14 @@
+# Megatest serve configuration
+title: "Megatest Reports"
+
+server:
+  port: 3000
+  host: "0.0.0.0"
+
+# Projects to serve reports from
+# Each entry needs a path to the repo containing .megatest/
+projects:
+  - name: my-app
+    path: /data/my-app
+  # - name: another-project
+  #   path: /data/another-project

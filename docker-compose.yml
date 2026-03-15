@@ -1,0 +1,24 @@
+services:
+  megatest:
+    build: .
+    restart: unless-stopped
+    volumes:
+      - ./serve.config.yml:/app/serve.config.yml:ro
+      # Mount project directories so they're accessible at the paths in serve.config.yml
+      # Example: if your config has path: /data/fj2, mount the repo there
+      # - /home/ubuntu/git/fj2:/data/fj2:ro
+    networks:
+      - traefik-proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.megatest.rule=Host(`megatest.opendle.com`)"
+      - "traefik.http.routers.megatest.entrypoints=websecure"
+      - "traefik.http.routers.megatest.tls=true"
+      - "traefik.http.routers.megatest.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.megatest.middlewares=badger@file"
+      - "traefik.http.services.megatest.loadbalancer.server.port=3000"
+      - "traefik.docker.network=traefik-proxy"
+
+networks:
+  traefik-proxy:
+    external: true

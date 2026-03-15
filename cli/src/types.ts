@@ -25,3 +25,28 @@ export interface RunResult {
   errors: number;
   duration: number;
 }
+
+export interface ReportMeta {
+  commitHash: string;
+  timestamp: string;
+  passed: number;
+  failed: number;
+  newCount: number;
+  errors: number;
+  duration: number;
+  totalCheckpoints: number;
+}
+
+export interface ServeProjectConfig {
+  name: string;
+  path: string;
+}
+
+export interface ServeConfig {
+  title: string;
+  server: {
+    port: number;
+    host: string;
+  };
+  projects: ServeProjectConfig[];
+}
