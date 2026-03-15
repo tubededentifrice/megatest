@@ -12,7 +12,7 @@ It has two parts:
 ### 1. Install
 
 ```bash
-cd ~/git/megatest/cli
+cd cli
 npm install
 npm run build
 npx playwright install chromium
@@ -29,7 +29,6 @@ claude mcp add -s user playwright -- npx @playwright/mcp@latest
 Then launch Claude Code from the megatest directory:
 
 ```bash
-cd ~/git/megatest
 claude
 ```
 
@@ -44,7 +43,7 @@ Either write it by hand (see [Config Format](#config-format) below) or use the C
 ### 4. Run tests
 
 ```bash
-node ~/git/megatest/cli/bin/megatest.js run --repo ../my-project --url http://localhost:3000
+node cli/bin/megatest.js run --repo ../my-project --url http://localhost:3000
 ```
 
 First run: all screenshots are "new" (no baselines yet). A report is generated at `.megatest/reports/<commit>/index.html`.
@@ -52,7 +51,7 @@ First run: all screenshots are "new" (no baselines yet). A report is generated a
 ### 5. Accept baselines
 
 ```bash
-node ~/git/megatest/cli/bin/megatest.js accept --repo ../my-project
+node cli/bin/megatest.js accept --repo ../my-project
 ```
 
 This promotes the current screenshots to baselines. Commit the `baselines/` directory.
@@ -60,7 +59,7 @@ This promotes the current screenshots to baselines. Commit the `baselines/` dire
 ### 6. Run again after changes
 
 ```bash
-node ~/git/megatest/cli/bin/megatest.js run --repo ../my-project --url http://localhost:3000
+node cli/bin/megatest.js run --repo ../my-project --url http://localhost:3000
 ```
 
 Screenshots are compared against baselines. Diffs above the threshold are reported as failures.
@@ -342,20 +341,20 @@ A typical session for a project at `../my-app` running on `http://localhost:3000
 # /megatest ../my-app http://localhost:3000
 
 # Or create .megatest/ manually, then validate
-node ~/git/megatest/cli/bin/megatest.js validate --repo ../my-app
+node cli/bin/megatest.js validate --repo ../my-app
 
 # First run — establishes initial screenshots
-node ~/git/megatest/cli/bin/megatest.js run --repo ../my-app --url http://localhost:3000
+node cli/bin/megatest.js run --repo ../my-app --url http://localhost:3000
 
 # Accept all as baselines
-node ~/git/megatest/cli/bin/megatest.js accept --repo ../my-app
+node cli/bin/megatest.js accept --repo ../my-app
 
 # Commit baselines to git
 cd ../my-app && git add .megatest/baselines .megatest/config.yml .megatest/workflows .megatest/plans
 
 # Make changes to your app, then re-run
-node ~/git/megatest/cli/bin/megatest.js run --repo ../my-app --url http://localhost:3000
+node cli/bin/megatest.js run --repo ../my-app --url http://localhost:3000
 
 # Review the report, then accept intentional changes
-node ~/git/megatest/cli/bin/megatest.js accept hero-section --repo ../my-app
+node cli/bin/megatest.js accept hero-section --repo ../my-app
 ```
