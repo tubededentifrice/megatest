@@ -83,6 +83,14 @@ cd cli && npm run build
 docker compose up --build -d
 ```
 
+### Accessing the Live Site
+
+The public URL `https://megatest.opendle.com/` is behind badger auth and **cannot be accessed by agents**. When the user references this URL, use the local Docker container instead:
+
+- **Local URL**: `http://172.26.0.6:3000/` (container IP on the `traefik-proxy` Docker network)
+- If the container IP changes after a rebuild, re-inspect with: `docker inspect megatest-megatest-1 --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'`
+- The container serves on port 3000 internally
+
 ## Specs (Historical Reference Only)
 
 The `spec/` directory contains **design documents written before and during development**. The code may have diverged from these specs.
