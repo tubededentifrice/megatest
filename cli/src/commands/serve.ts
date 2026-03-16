@@ -911,7 +911,7 @@ ${CSS_TOKENS}
 
 /* --- Left sidebar --- */
 .rv__sidebar {
-  width: 300px; min-width: 300px;
+  width: 500px; min-width: 500px;
   border-right: 1px solid var(--c-border);
   background: var(--c-surface);
   display: flex; flex-direction: column;
@@ -940,10 +940,14 @@ ${CSS_TOKENS}
 }
 
 .rv__panels { flex: 1; overflow-y: auto; }
-.rv__panel { padding: var(--sp-sm); }
+.rv__panel {
+  padding: var(--sp-sm);
+  display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-sm);
+  align-content: start;
+}
 .rv__panel.hidden { display: none; }
 
-.rv__empty { padding: var(--sp-lg); text-align: center; }
+.rv__empty { padding: var(--sp-lg); text-align: center; grid-column: 1 / -1; }
 
 .rv__sidebar-footer {
   flex-shrink: 0;
@@ -953,7 +957,6 @@ ${CSS_TOKENS}
 
 /* --- Thumbnails --- */
 .rv-thumb {
-  margin-bottom: var(--sp-sm);
   border: 2px solid var(--c-border);
   border-radius: var(--r-md);
   overflow: hidden;
@@ -972,8 +975,18 @@ ${CSS_TOKENS}
   letter-spacing: .03em;
 }
 
-.rv-thumb__wrap { position: relative; }
-.rv-thumb__img { width: 100%; display: block; }
+.rv-thumb__wrap {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: var(--c-bg);
+}
+.rv-thumb__img {
+  width: 100%; height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: top center;
+}
 
 .rv-thumb__label {
   padding: var(--sp-xs) var(--sp-sm);
