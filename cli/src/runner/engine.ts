@@ -351,6 +351,47 @@ export async function runEngine(opts: EngineOptions): Promise<CheckpointResult[]
 
         // Drain remaining tasks
         await Promise.all(active);
+
+        // Run teardown steps (cleanup after all workflows complete)
+        if (config.config.teardown && config.config.teardown.length > 0) {
+            console.log('\n  Teardown: running cleanup steps...');
+            try {
+                let teardownSteps = resolveIncludes(config.config.teardown, config.includes);
+                const variables = config.config.variables;
+                teardownSteps = teardownSteps.map((step) => {
+                    const { step: interpolated } = interpolateStep(step, variables);
+                    return interpolated;
+                });
+
+                const defaultVp = config.config.defaults.viewport;
+                const context = await createContext(browser, defaultVp);
+                const page = await createPage(context);
+
+                const stepCtx: StepContext = {
+                    baseUrl: opts.baseUrl,
+                    viewports: config.config.viewports,
+                    screenshotMode: config.config.defaults.screenshotMode,
+                    actualsDir,
+                    viewportName: 'desktop',
+                    timeout: config.config.defaults.timeout,
+                    waitAfterNavigation: config.config.defaults.waitAfterNavigation,
+                    codec: opts.codec,
+                };
+
+                for (let i = 0; i < teardownSteps.length; i++) {
+                    const step = teardownSteps[i];
+                    const stepType = Object.keys(step)[0];
+                    await executeStep(page, step, stepCtx);
+                    console.log(`  Teardown: step ${i + 1}/${teardownSteps.length} (${stepType}) done`);
+                }
+
+                await context.close();
+                console.log('  Teardown: complete');
+            } catch (err: unknown) {
+                const message = err instanceof Error ? err.message : String(err);
+                console.error(`  Teardown failed: ${message}`);
+            }
+        }
     } finally {
         await browser.close();
     }

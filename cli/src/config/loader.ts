@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as yaml from 'js-yaml';
-import type { Include, LoadedConfig, MegatestConfig, Plan, Workflow } from './schema.js';
+import type { Include, LoadedConfig, MegatestConfig, Plan, Step, Workflow } from './schema.js';
 
 const DEFAULT_CONFIG: MegatestConfig = {
     version: '1',
@@ -63,6 +63,10 @@ function applyConfigDefaults(raw: Record<string, unknown>): MegatestConfig {
         viewports: (raw.viewports as Record<string, { width: number; height: number }>) ?? DEFAULT_CONFIG.viewports,
         variables: (raw.variables as Record<string, string>) ?? DEFAULT_CONFIG.variables,
     };
+
+    if (Array.isArray(raw.teardown)) {
+        config.teardown = raw.teardown as Step[];
+    }
 
     return config;
 }

@@ -307,6 +307,25 @@ export function validate(config: LoadedConfig): ValidationError[] {
         }
     }
 
+    // Validate teardown steps
+    if (config.config.teardown) {
+        const viewportNameSet = new Set(Object.keys(config.config.viewports));
+        for (const step of config.config.teardown) {
+            errors.push(...validateStep(step, 'config.yml (teardown)', viewportNameSet));
+        }
+        // Check include references in teardown steps
+        const teardownIncludeRefs = getIncludeReferences(config.config.teardown);
+        for (const ref of teardownIncludeRefs) {
+            if (!config.includes.has(ref)) {
+                errors.push({
+                    file: 'config.yml (teardown)',
+                    message: `Include reference "${ref}" not found`,
+                    severity: 'error',
+                });
+            }
+        }
+    }
+
     // Detect circular includes
     const circularErrors = detectCircularIncludes(config);
     for (const err of circularErrors) {

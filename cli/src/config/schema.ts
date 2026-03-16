@@ -16,6 +16,7 @@ export interface MegatestConfig {
     };
     viewports: Record<string, Viewport>;
     variables: Record<string, string>;
+    teardown?: Step[]; // steps to run once after all workflows complete (cleanup)
 }
 
 export interface Locator {
