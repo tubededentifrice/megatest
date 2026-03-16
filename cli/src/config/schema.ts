@@ -12,6 +12,7 @@ export interface MegatestConfig {
         screenshotMode: 'viewport' | 'full';
         timeout: number; // per-step timeout in ms
         format: 'png' | 'webp'; // screenshot image format
+        concurrency: number; // max parallel (workflow, viewport) pairs
     };
     viewports: Record<string, Viewport>;
     variables: Record<string, string>;

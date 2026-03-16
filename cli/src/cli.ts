@@ -21,9 +21,16 @@ program
     .requiredOption('--url <url>', 'Base URL of the running application')
     .option('--plan <name>', 'Plan to execute')
     .option('--workflow <name>', 'Single workflow to execute')
+    .option('--concurrency <n>', 'Max parallel workflows (default: from config or 4)')
     .action(async (opts) => {
         const { runRun } = await import('./commands/run.js');
-        const code = await runRun(opts);
+        const code = await runRun({
+            repo: opts.repo,
+            url: opts.url,
+            plan: opts.plan,
+            workflow: opts.workflow,
+            concurrency: opts.concurrency ? Number(opts.concurrency) : undefined,
+        });
         process.exit(code);
     });
 

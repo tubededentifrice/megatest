@@ -16,6 +16,7 @@ export interface RunOptions {
     url: string;
     plan?: string;
     workflow?: string;
+    concurrency?: number;
 }
 
 export async function runRun(opts: RunOptions): Promise<number> {
@@ -71,9 +72,12 @@ export async function runRun(opts: RunOptions): Promise<number> {
         workflowNames = Array.from(config.workflows.keys());
     }
 
+    const concurrency = opts.concurrency ?? config.config.defaults.concurrency;
+
     console.log(`Running ${workflowNames.length} workflow(s): ${workflowNames.join(', ')}`);
     console.log(`Viewports: ${Object.keys(config.config.viewports).join(', ')}`);
     console.log(`Base URL: ${url}`);
+    console.log(`Concurrency: ${concurrency}`);
     console.log('');
 
     // 5. Create image codec
@@ -101,6 +105,7 @@ export async function runRun(opts: RunOptions): Promise<number> {
             workflowNames,
             actualsDir,
             codec,
+            concurrency,
         });
     } catch (err: any) {
         console.error(`Browser error: ${err.message}`);

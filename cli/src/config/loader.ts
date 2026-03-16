@@ -12,6 +12,7 @@ const DEFAULT_CONFIG: MegatestConfig = {
         screenshotMode: 'viewport',
         timeout: 30000,
         format: 'webp',
+        concurrency: 4,
     },
     viewports: {
         desktop: { width: 1280, height: 720 },
@@ -57,6 +58,7 @@ function applyConfigDefaults(raw: Record<string, unknown>): MegatestConfig {
                 (rawDefaults.screenshotMode as 'viewport' | 'full') ?? DEFAULT_CONFIG.defaults.screenshotMode,
             timeout: (rawDefaults.timeout as number) ?? DEFAULT_CONFIG.defaults.timeout,
             format: (rawDefaults.format as 'png' | 'webp') ?? DEFAULT_CONFIG.defaults.format,
+            concurrency: (rawDefaults.concurrency as number) ?? DEFAULT_CONFIG.defaults.concurrency,
         },
         viewports: (raw.viewports as Record<string, { width: number; height: number }>) ?? DEFAULT_CONFIG.viewports,
         variables: (raw.variables as Record<string, string>) ?? DEFAULT_CONFIG.variables,

@@ -33,6 +33,37 @@ export function printStepError(
     }
 }
 
+export function printTaskStart(index: number, total: number, workflow: string, viewport: string): void {
+    console.log(`  [${index}/${total}] Starting ${workflow} [${viewport}]...`);
+}
+
+export function printTaskComplete(
+    index: number,
+    total: number,
+    workflow: string,
+    viewport: string,
+    stepCount: number,
+    durationMs: number,
+): void {
+    console.log(
+        `  [${index}/${total}] \u2713 ${workflow} [${viewport}] (${stepCount} steps, ${(durationMs / 1000).toFixed(1)}s)`,
+    );
+}
+
+export function printTaskError(
+    index: number,
+    total: number,
+    workflow: string,
+    viewport: string,
+    error: string,
+    stepDetail?: string,
+): void {
+    console.error(`  [${index}/${total}] \u2717 ${workflow} [${viewport}]: ${error}`);
+    if (stepDetail) {
+        console.error(`    step: ${stepDetail}`);
+    }
+}
+
 export function printSummary(result: RunResult): void {
     console.log('');
     console.log('\u2500'.repeat(50));
