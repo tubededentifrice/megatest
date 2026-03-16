@@ -72,7 +72,7 @@ export async function runRun(opts: RunOptions): Promise<number> {
         workflowNames = Array.from(config.workflows.keys());
     }
 
-    const concurrency = opts.concurrency ?? config.config.defaults.concurrency;
+    const concurrency = Math.max(1, opts.concurrency ?? config.config.defaults.concurrency);
 
     console.log(`Running ${workflowNames.length} workflow(s): ${workflowNames.join(', ')}`);
     console.log(`Viewports: ${Object.keys(config.config.viewports).join(', ')}`);
