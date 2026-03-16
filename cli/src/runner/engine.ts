@@ -359,7 +359,10 @@ export async function runEngine(opts: EngineOptions): Promise<CheckpointResult[]
                 let teardownSteps = resolveIncludes(config.config.teardown, config.includes);
                 const variables = config.config.variables;
                 teardownSteps = teardownSteps.map((step) => {
-                    const { step: interpolated } = interpolateStep(step, variables);
+                    const { step: interpolated, warnings } = interpolateStep(step, variables);
+                    for (const w of warnings) {
+                        console.warn(`  \u26A0 teardown: ${w}`);
+                    }
                     return interpolated;
                 });
 
@@ -367,26 +370,29 @@ export async function runEngine(opts: EngineOptions): Promise<CheckpointResult[]
                 const context = await createContext(browser, defaultVp);
                 const page = await createPage(context);
 
-                const stepCtx: StepContext = {
-                    baseUrl: opts.baseUrl,
-                    viewports: config.config.viewports,
-                    screenshotMode: config.config.defaults.screenshotMode,
-                    actualsDir,
-                    viewportName: 'desktop',
-                    timeout: config.config.defaults.timeout,
-                    waitAfterNavigation: config.config.defaults.waitAfterNavigation,
-                    codec: opts.codec,
-                };
+                try {
+                    const stepCtx: StepContext = {
+                        baseUrl: opts.baseUrl,
+                        viewports: config.config.viewports,
+                        screenshotMode: config.config.defaults.screenshotMode,
+                        actualsDir,
+                        viewportName: 'desktop',
+                        timeout: config.config.defaults.timeout,
+                        waitAfterNavigation: config.config.defaults.waitAfterNavigation,
+                        codec: opts.codec,
+                    };
 
-                for (let i = 0; i < teardownSteps.length; i++) {
-                    const step = teardownSteps[i];
-                    const stepType = Object.keys(step)[0];
-                    await executeStep(page, step, stepCtx);
-                    console.log(`  Teardown: step ${i + 1}/${teardownSteps.length} (${stepType}) done`);
+                    for (let i = 0; i < teardownSteps.length; i++) {
+                        const step = teardownSteps[i];
+                        const stepType = Object.keys(step)[0];
+                        await executeStep(page, step, stepCtx);
+                        console.log(`  Teardown: step ${i + 1}/${teardownSteps.length} (${stepType}) done`);
+                    }
+
+                    console.log('  Teardown: complete');
+                } finally {
+                    await context.close();
                 }
-
-                await context.close();
-                console.log('  Teardown: complete');
             } catch (err: unknown) {
                 const message = err instanceof Error ? err.message : String(err);
                 console.error(`  Teardown failed: ${message}`);
