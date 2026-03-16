@@ -66,6 +66,8 @@ export async function runDiffPipeline(
             // Dimension mismatch = fail
             const reportActual = path.join(reportDir, `${result.checkpoint}-${result.viewport}-actual${ext}`);
             fs.copyFileSync(result.actualPath, reportActual);
+            const reportBaseline = path.join(reportDir, `${result.checkpoint}-${result.viewport}-baseline${ext}`);
+            fs.copyFileSync(baselinePath, reportBaseline);
 
             updated.push({
                 ...result,
@@ -82,9 +84,11 @@ export async function runDiffPipeline(
 
         if (comparison.diffPercent > threshold) {
             // Diff exceeds threshold = fail
-            // Save actual + diff to report dir
+            // Save actual + diff + baseline to report dir
             const reportActual = path.join(reportDir, `${result.checkpoint}-${result.viewport}-actual${ext}`);
             fs.copyFileSync(result.actualPath, reportActual);
+            const reportBaseline = path.join(reportDir, `${result.checkpoint}-${result.viewport}-baseline${ext}`);
+            fs.copyFileSync(baselinePath, reportBaseline);
 
             updated.push({
                 ...result,

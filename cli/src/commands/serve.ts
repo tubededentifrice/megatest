@@ -477,6 +477,9 @@ function renderReviewPage(
             case 'diff':
                 return `${reportBase}/${slug}-diff${ext}`;
             case 'baseline':
+                if (cp.status === 'fail') {
+                    return `${reportBase}/${slug}-baseline${ext}`;
+                }
                 return `${base}/baselines/${slug}${ext}`;
         }
     }

@@ -86,7 +86,7 @@ function getImagePath(cp: CheckpointResult, type: 'actual' | 'diff' | 'baseline'
 }
 
 function renderFailedCheckpoint(cp: CheckpointResult, ext: string): string {
-    const baselineSrc = getImagePath(cp, 'baseline', ext);
+    const baselineSrc = `${cp.checkpoint}-${cp.viewport}-baseline${ext}`;
     const actualSrc = getImagePath(cp, 'actual', ext);
     const diffSrc = getImagePath(cp, 'diff', ext);
     const diffText = cp.diffPercent !== null ? `${cp.diffPercent.toFixed(2)}% diff` : 'N/A';
