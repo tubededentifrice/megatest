@@ -716,5 +716,19 @@ document.addEventListener('keydown', function(e) {
     };
     fs.writeFileSync(path.join(reportDir, 'meta.json'), JSON.stringify(meta, null, 2));
 
+    const reviewData = {
+        extension,
+        checkpoints: result.checkpoints.map((cp) => ({
+            workflow: cp.workflow,
+            checkpoint: cp.checkpoint,
+            viewport: cp.viewport,
+            status: cp.status,
+            diffPercent: cp.diffPercent,
+            diffPixels: cp.diffPixels,
+            error: cp.error,
+        })),
+    };
+    fs.writeFileSync(path.join(reportDir, 'results.json'), JSON.stringify(reviewData, null, 2));
+
     return outputPath;
 }

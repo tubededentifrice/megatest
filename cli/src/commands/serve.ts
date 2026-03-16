@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as http from 'node:http';
 import * as path from 'node:path';
 import * as yaml from 'js-yaml';
-import type { ReportMeta, ServeConfig, ServeProjectConfig } from '../types.js';
+import type { ReportMeta, ReviewCheckpoint, ServeConfig, ServeProjectConfig } from '../types.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -20,6 +20,11 @@ interface ReportEntry {
     meta: ReportMeta | null;
     mtime: Date;
     reportUrl: string;
+}
+
+interface ReviewData {
+    extension: string;
+    checkpoints: ReviewCheckpoint[];
 }
 
 // ---------------------------------------------------------------------------
@@ -134,7 +139,7 @@ function listReports(project: DiscoveredProject): ReportEntry[] {
             commitHash: dirName,
             meta,
             mtime: stat.mtime,
-            reportUrl: `/projects/${encodeURIComponent(project.name)}/reports/${encodeURIComponent(dirName)}/index.html`,
+            reportUrl: `/projects/${encodeURIComponent(project.name)}/reports/${encodeURIComponent(dirName)}/review`,
         });
     }
 
@@ -146,6 +151,86 @@ function listReports(project: DiscoveredProject): ReportEntry[] {
     });
 
     return entries;
+}
+
+// ---------------------------------------------------------------------------
+// Review data loading
+// ---------------------------------------------------------------------------
+
+function loadReviewData(megatestDir: string, commitDir: string): ReviewData | null {
+    // Try results.json first
+    const resultsPath = path.join(commitDir, 'results.json');
+    if (fs.existsSync(resultsPath)) {
+        try {
+            return JSON.parse(fs.readFileSync(resultsPath, 'utf-8')) as ReviewData;
+        } catch {
+            // Fall through to reconstruction
+        }
+    }
+
+    // Reconstruct from filesystem
+    const baselinesDir = path.join(megatestDir, 'baselines');
+    let files: string[];
+    try {
+        files = fs.readdirSync(commitDir);
+    } catch {
+        return null;
+    }
+
+    // Detect extension
+    const hasWebp = files.some((f) => f.endsWith('.webp'));
+    const ext = hasWebp ? '.webp' : '.png';
+
+    const actualFiles = files.filter((f) => f.includes('-actual') && f.endsWith(ext));
+    const diffFiles = new Set(files.filter((f) => f.includes('-diff') && f.endsWith(ext)));
+
+    const checkpoints: ReviewCheckpoint[] = [];
+
+    for (const af of actualFiles) {
+        const slug = af.replace(`-actual${ext}`, '');
+        const lastDash = slug.lastIndexOf('-');
+        if (lastDash === -1) continue;
+        const cp = slug.substring(0, lastDash);
+        const vp = slug.substring(lastDash + 1);
+        const hasDiff = diffFiles.has(`${slug}-diff${ext}`);
+
+        checkpoints.push({
+            workflow: '',
+            checkpoint: cp,
+            viewport: vp,
+            status: hasDiff ? 'fail' : 'new',
+            diffPercent: null,
+            diffPixels: null,
+            error: null,
+        });
+    }
+
+    // Find passed checkpoints from baselines not in the fail/new set
+    const knownSlugs = new Set(checkpoints.map((c) => `${c.checkpoint}-${c.viewport}`));
+    if (fs.existsSync(baselinesDir)) {
+        try {
+            for (const bf of fs.readdirSync(baselinesDir)) {
+                if (!bf.endsWith(ext)) continue;
+                const slug = bf.replace(ext, '');
+                if (knownSlugs.has(slug)) continue;
+                const lastDash = slug.lastIndexOf('-');
+                if (lastDash === -1) continue;
+                checkpoints.push({
+                    workflow: '',
+                    checkpoint: slug.substring(0, lastDash),
+                    viewport: slug.substring(lastDash + 1),
+                    status: 'pass',
+                    diffPercent: null,
+                    diffPixels: null,
+                    error: null,
+                });
+            }
+        } catch {
+            // Ignore
+        }
+    }
+
+    return { extension: ext, checkpoints };
 }
 
 // ---------------------------------------------------------------------------
@@ -171,7 +256,7 @@ function getMimeType(filePath: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Dashboard HTML
+// Shared helpers
 // ---------------------------------------------------------------------------
 
 function escapeHtml(str: string): string {
@@ -189,6 +274,39 @@ function formatDuration(ms: number): string {
 function timeTag(dateStr: string): string {
     return `<time data-ts="${escapeHtml(dateStr)}"></time>`;
 }
+
+function jsonReply(res: http.ServerResponse, status: number, data: Record<string, unknown>): void {
+    res.writeHead(status, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(data));
+}
+
+function parseJsonBody(req: http.IncomingMessage, maxBytes = 10240): Promise<Record<string, unknown>> {
+    return new Promise((resolve, reject) => {
+        let body = '';
+        let size = 0;
+        req.on('data', (chunk: Buffer) => {
+            size += chunk.length;
+            if (size > maxBytes) {
+                reject(new Error('Body too large'));
+                req.destroy();
+                return;
+            }
+            body += chunk.toString();
+        });
+        req.on('end', () => {
+            try {
+                resolve(body.length > 0 ? (JSON.parse(body) as Record<string, unknown>) : {});
+            } catch {
+                reject(new Error('Invalid JSON'));
+            }
+        });
+        req.on('error', reject);
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard HTML
+// ---------------------------------------------------------------------------
 
 function renderBadges(meta: ReportMeta): string {
     const parts: string[] = [];
@@ -332,10 +450,311 @@ ${DASHBOARD_CSS}
 }
 
 // ---------------------------------------------------------------------------
-// Dashboard CSS (reuses design tokens from report CSS)
+// Review page HTML
 // ---------------------------------------------------------------------------
 
-const DASHBOARD_CSS = `
+function renderReviewPage(
+    projectName: string,
+    commitHash: string,
+    data: ReviewData,
+    meta: ReportMeta | null,
+    title: string,
+): string {
+    const ext = data.extension;
+    const base = `/projects/${encodeURIComponent(projectName)}`;
+    const reportBase = `${base}/reports/${encodeURIComponent(commitHash)}`;
+
+    const failed = data.checkpoints.filter((c) => c.status === 'fail');
+    const newCps = data.checkpoints.filter((c) => c.status === 'new');
+    const passed = data.checkpoints.filter((c) => c.status === 'pass');
+    const errors = data.checkpoints.filter((c) => c.status === 'error');
+
+    function imgUrl(type: 'actual' | 'diff' | 'baseline', cp: ReviewCheckpoint): string {
+        const slug = `${cp.checkpoint}-${cp.viewport}`;
+        switch (type) {
+            case 'actual':
+                return `${reportBase}/${slug}-actual${ext}`;
+            case 'diff':
+                return `${reportBase}/${slug}-diff${ext}`;
+            case 'baseline':
+                return `${base}/baselines/${slug}${ext}`;
+        }
+    }
+
+    function renderDiffThumb(cp: ReviewCheckpoint): string {
+        const slug = `${cp.checkpoint}-${cp.viewport}`;
+        const diffUrl = imgUrl('diff', cp);
+        const baselineUrl = imgUrl('baseline', cp);
+        const actualUrl = imgUrl('actual', cp);
+        const pct = cp.diffPercent !== null ? `${cp.diffPercent.toFixed(2)}%` : '';
+
+        return `
+        <div class="rv-thumb" data-cp="${escapeHtml(cp.checkpoint)}" data-vp="${escapeHtml(cp.viewport)}"
+             data-status="fail" data-default="${escapeHtml(diffUrl)}" data-slug="${escapeHtml(slug)}">
+          <div class="rv-thumb__wrap">
+            <img src="${escapeHtml(diffUrl)}" alt="${escapeHtml(slug)}" class="rv-thumb__img" loading="lazy">
+            <div class="rv-thumb__overlay">
+              <div class="rv-zone rv-zone--diff" data-img="${escapeHtml(diffUrl)}">Diff</div>
+              <div class="rv-zone rv-zone--baseline" data-img="${escapeHtml(baselineUrl)}">Baseline</div>
+              <div class="rv-zone rv-zone--actual" data-img="${escapeHtml(actualUrl)}">Actual</div>
+            </div>
+            <button class="rv-accept-btn" data-cp="${escapeHtml(cp.checkpoint)}" data-vp="${escapeHtml(cp.viewport)}">Accept</button>
+          </div>
+          <div class="rv-thumb__label">
+            <span class="rv-thumb__name">${escapeHtml(cp.checkpoint)}</span>
+            <span class="rv-thumb__meta">${escapeHtml(cp.viewport)}${pct ? ` &middot; ${pct}` : ''}</span>
+          </div>
+        </div>`;
+    }
+
+    function renderNewThumb(cp: ReviewCheckpoint): string {
+        const slug = `${cp.checkpoint}-${cp.viewport}`;
+        const actualUrl = imgUrl('actual', cp);
+
+        return `
+        <div class="rv-thumb" data-cp="${escapeHtml(cp.checkpoint)}" data-vp="${escapeHtml(cp.viewport)}"
+             data-status="new" data-default="${escapeHtml(actualUrl)}" data-slug="${escapeHtml(slug)}">
+          <div class="rv-thumb__wrap">
+            <img src="${escapeHtml(actualUrl)}" alt="${escapeHtml(slug)}" class="rv-thumb__img" loading="lazy">
+            <button class="rv-accept-btn" data-cp="${escapeHtml(cp.checkpoint)}" data-vp="${escapeHtml(cp.viewport)}">Accept</button>
+          </div>
+          <div class="rv-thumb__label">
+            <span class="rv-thumb__name">${escapeHtml(cp.checkpoint)}</span>
+            <span class="rv-thumb__meta">${escapeHtml(cp.viewport)} &middot; new</span>
+          </div>
+        </div>`;
+    }
+
+    function renderPassedThumb(cp: ReviewCheckpoint): string {
+        const slug = `${cp.checkpoint}-${cp.viewport}`;
+        const baselineUrl = imgUrl('baseline', cp);
+
+        return `
+        <div class="rv-thumb" data-cp="${escapeHtml(cp.checkpoint)}" data-vp="${escapeHtml(cp.viewport)}"
+             data-status="pass" data-default="${escapeHtml(baselineUrl)}" data-slug="${escapeHtml(slug)}">
+          <div class="rv-thumb__wrap">
+            <img src="${escapeHtml(baselineUrl)}" alt="${escapeHtml(slug)}" class="rv-thumb__img" loading="lazy">
+          </div>
+          <div class="rv-thumb__label">
+            <span class="rv-thumb__name">${escapeHtml(cp.checkpoint)}</span>
+            <span class="rv-thumb__meta">${escapeHtml(cp.viewport)}</span>
+          </div>
+        </div>`;
+    }
+
+    const diffThumbs = failed.map((cp) => renderDiffThumb(cp)).join('\n');
+    const newThumbs = newCps.map((cp) => renderNewThumb(cp)).join('\n');
+    const passedThumbs = passed.map((cp) => renderPassedThumb(cp)).join('\n');
+
+    const hasChanges = failed.length + newCps.length > 0;
+    const acceptAllBtn = hasChanges
+        ? `<button class="rv-accept-all" id="accept-all-btn">Accept All Changes</button>`
+        : '';
+
+    // Determine default active tab
+    const defaultTab = failed.length > 0 ? 'diff' : newCps.length > 0 ? 'new' : 'pass';
+
+    // Meta info line
+    const metaLine = meta
+        ? `<span class="muted text-xs">${formatDuration(meta.duration)} &middot; ${meta.totalCheckpoints} checkpoints</span>`
+        : '';
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Review &mdash; ${escapeHtml(projectName)} &mdash; ${escapeHtml(commitHash)}</title>
+  <style>
+${REVIEW_CSS}
+  </style>
+</head>
+<body>
+  <div class="rv">
+    <div class="rv__topbar">
+      <div class="rv__breadcrumb">
+        <a href="/">${escapeHtml(title)}</a>
+        <span class="rv__sep">/</span>
+        <a href="/">${escapeHtml(projectName)}</a>
+        <span class="rv__sep">/</span>
+        <span class="rv__current mono">${escapeHtml(commitHash.substring(0, 8))}</span>
+      </div>
+      ${metaLine}
+    </div>
+
+    <div class="rv__layout">
+      <div class="rv__sidebar">
+        <div class="rv__tabs">
+          <button class="rv__tab${defaultTab === 'diff' ? ' active' : ''}" data-tab="diff">
+            Differences <span class="rv__tab-count">${failed.length}</span>
+          </button>
+          <button class="rv__tab${defaultTab === 'new' ? ' active' : ''}" data-tab="new">
+            New <span class="rv__tab-count">${newCps.length}</span>
+          </button>
+          <button class="rv__tab${defaultTab === 'pass' ? ' active' : ''}" data-tab="pass">
+            Passed <span class="rv__tab-count">${passed.length}</span>
+          </button>
+        </div>
+
+        <div class="rv__panels">
+          <div class="rv__panel${defaultTab === 'diff' ? '' : ' hidden'}" id="tab-diff">
+            ${diffThumbs || '<div class="rv__empty muted text-xs">No differences</div>'}
+          </div>
+          <div class="rv__panel${defaultTab === 'new' ? '' : ' hidden'}" id="tab-new">
+            ${newThumbs || '<div class="rv__empty muted text-xs">No new checkpoints</div>'}
+          </div>
+          <div class="rv__panel${defaultTab === 'pass' ? '' : ' hidden'}" id="tab-pass">
+            ${passedThumbs || '<div class="rv__empty muted text-xs">No passed checkpoints</div>'}
+          </div>
+        </div>
+
+        <div class="rv__sidebar-footer">
+          ${acceptAllBtn}
+        </div>
+      </div>
+
+      <div class="rv__preview" id="preview">
+        <img id="preview-img" src="" alt="" style="display:none">
+        <div class="rv__preview-empty" id="preview-empty">
+          <span class="muted">Hover a thumbnail to preview</span>
+        </div>
+        <div class="rv__preview-label" id="preview-label"></div>
+      </div>
+    </div>
+  </div>
+
+  ${errors.length > 0 ? `<!-- ${errors.length} error checkpoint(s) omitted from review -->` : ''}
+
+  <script>
+(function() {
+  var ACCEPT_URL = '${escapeHtml(reportBase)}/accept';
+  var ACCEPT_ALL_URL = '${escapeHtml(reportBase)}/accept-all';
+  var previewImg = document.getElementById('preview-img');
+  var previewEmpty = document.getElementById('preview-empty');
+  var previewLabel = document.getElementById('preview-label');
+  var selectedThumb = null;
+
+  // --- Tab switching ---
+  var tabs = document.querySelectorAll('.rv__tab');
+  var panels = document.querySelectorAll('.rv__panel');
+  tabs.forEach(function(tab) {
+    tab.addEventListener('click', function() {
+      var target = this.dataset.tab;
+      tabs.forEach(function(t) { t.classList.toggle('active', t.dataset.tab === target); });
+      panels.forEach(function(p) { p.classList.toggle('hidden', p.id !== 'tab-' + target); });
+    });
+  });
+
+  // --- Preview ---
+  function showPreview(url, label) {
+    if (!url) return;
+    previewImg.src = url;
+    previewImg.style.display = '';
+    previewEmpty.style.display = 'none';
+    if (label) previewLabel.textContent = label;
+  }
+
+  // --- Thumbnails ---
+  document.querySelectorAll('.rv-thumb').forEach(function(thumb) {
+    // Zone hover: switch preview
+    thumb.querySelectorAll('.rv-zone').forEach(function(zone) {
+      zone.addEventListener('mouseenter', function() {
+        var label = this.textContent + ' — ' + thumb.dataset.slug;
+        showPreview(this.dataset.img, label);
+      });
+    });
+
+    // Thumbnail hover: select and show default preview
+    thumb.addEventListener('mouseenter', function() {
+      if (selectedThumb) selectedThumb.classList.remove('selected');
+      selectedThumb = this;
+      this.classList.add('selected');
+      var statusLabel = this.dataset.status === 'fail' ? 'Diff'
+        : this.dataset.status === 'new' ? 'Actual' : 'Baseline';
+      showPreview(this.dataset.default, statusLabel + ' — ' + this.dataset.slug);
+    });
+
+    // Click to pin
+    thumb.addEventListener('click', function(e) {
+      if (e.target.closest('.rv-accept-btn')) return;
+      if (selectedThumb) selectedThumb.classList.remove('selected');
+      selectedThumb = this;
+      this.classList.add('selected');
+      var statusLabel = this.dataset.status === 'fail' ? 'Diff'
+        : this.dataset.status === 'new' ? 'Actual' : 'Baseline';
+      showPreview(this.dataset.default, statusLabel + ' — ' + this.dataset.slug);
+    });
+  });
+
+  // --- Accept single ---
+  document.querySelectorAll('.rv-accept-btn').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      var thumb = this.closest('.rv-thumb');
+      var self = this;
+      self.disabled = true;
+      self.textContent = '...';
+      fetch(ACCEPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ checkpoint: thumb.dataset.cp, viewport: thumb.dataset.vp })
+      }).then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.ok) {
+            thumb.classList.add('accepted');
+          } else {
+            self.textContent = 'Error';
+          }
+        })
+        .catch(function() { self.textContent = 'Error'; });
+    });
+  });
+
+  // --- Accept all ---
+  var acceptAllBtn = document.getElementById('accept-all-btn');
+  if (acceptAllBtn) {
+    acceptAllBtn.addEventListener('click', function() {
+      var self = this;
+      self.disabled = true;
+      self.textContent = 'Accepting...';
+      fetch(ACCEPT_ALL_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      }).then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.ok) {
+            self.textContent = 'All accepted (' + (data.accepted || 0) + ')';
+            self.classList.add('rv-accept-all--done');
+            document.querySelectorAll('.rv-thumb[data-status="fail"], .rv-thumb[data-status="new"]')
+              .forEach(function(t) { t.classList.add('accepted'); });
+          } else {
+            self.textContent = 'Error';
+          }
+        })
+        .catch(function() { self.textContent = 'Error'; });
+    });
+  }
+
+  // --- Initial state: select first thumbnail ---
+  var first = document.querySelector('#tab-' + '${defaultTab}' + ' .rv-thumb');
+  if (first) {
+    first.classList.add('selected');
+    selectedThumb = first;
+    var statusLabel = first.dataset.status === 'fail' ? 'Diff'
+      : first.dataset.status === 'new' ? 'Actual' : 'Baseline';
+    showPreview(first.dataset.default, statusLabel + ' — ' + first.dataset.slug);
+  }
+})();
+  </script>
+</body>
+</html>`;
+}
+
+// ---------------------------------------------------------------------------
+// CSS constants
+// ---------------------------------------------------------------------------
+
+const CSS_TOKENS = `
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
@@ -376,6 +795,30 @@ body {
 a { color: var(--c-accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px;
+  font-size: var(--fs-xs); font-weight: 600;
+  border-radius: var(--r-pill); text-transform: uppercase; letter-spacing: .03em;
+}
+.badge--pass    { background: var(--c-pass-bg); color: var(--c-pass); }
+.badge--fail    { background: var(--c-fail-bg); color: var(--c-fail); }
+.badge--changed { background: var(--c-changed-bg); color: var(--c-changed); }
+.badge--new     { background: var(--c-new-bg);  color: var(--c-new); }
+.badge--muted   { background: rgba(139,148,158,.15); color: var(--c-muted); }
+
+.muted { color: var(--c-muted); }
+.mono { font-family: var(--ff-mono); }
+.text-sm { font-size: var(--fs-sm); }
+.text-xs { font-size: var(--fs-xs); }
+.ml-auto { margin-left: auto; }
+.stack { display: flex; flex-direction: column; }
+.gap-lg { gap: var(--sp-lg); }
+`;
+
+const DASHBOARD_CSS = `
+${CSS_TOKENS}
+
 .app  { display: flex; min-height: 100vh; }
 .main { flex: 1; }
 .page { padding: var(--sp-xl); max-width: 960px; margin: 0 auto; }
@@ -389,18 +832,6 @@ a:hover { text-decoration: underline; }
 }
 .topbar__breadcrumb { display: flex; align-items: center; gap: var(--sp-xs); font-size: var(--fs-md); color: var(--c-muted); }
 .topbar__breadcrumb span { color: var(--c-text); font-weight: 600; }
-
-.badge {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 2px 8px;
-  font-size: var(--fs-xs); font-weight: 600;
-  border-radius: var(--r-pill); text-transform: uppercase; letter-spacing: .03em;
-}
-.badge--pass    { background: var(--c-pass-bg); color: var(--c-pass); }
-.badge--fail    { background: var(--c-fail-bg); color: var(--c-fail); }
-.badge--changed { background: var(--c-changed-bg); color: var(--c-changed); }
-.badge--new     { background: var(--c-new-bg);  color: var(--c-new); }
-.badge--muted   { background: rgba(139,148,158,.15); color: var(--c-muted); }
 
 .card {
   background: var(--c-surface);
@@ -452,15 +883,300 @@ a:hover { text-decoration: underline; }
   padding: var(--sp-2xl) var(--sp-lg);
   text-align: center;
 }
-
-.stack { display: flex; flex-direction: column; }
-.gap-lg { gap: var(--sp-lg); }
-.muted { color: var(--c-muted); }
-.mono { font-family: var(--ff-mono); }
-.text-sm { font-size: var(--fs-sm); }
-.text-xs { font-size: var(--fs-xs); }
-.ml-auto { margin-left: auto; }
 `;
+
+const REVIEW_CSS = `
+${CSS_TOKENS}
+
+/* --- Full-height layout --- */
+.rv { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+.rv__topbar {
+  display: flex; align-items: center; gap: var(--sp-md);
+  padding: var(--sp-sm) var(--sp-lg);
+  border-bottom: 1px solid var(--c-border);
+  background: var(--c-surface);
+  flex-shrink: 0;
+}
+.rv__breadcrumb {
+  display: flex; align-items: center; gap: var(--sp-xs);
+  font-size: var(--fs-sm);
+}
+.rv__breadcrumb a { color: var(--c-muted); }
+.rv__breadcrumb a:hover { color: var(--c-accent); }
+.rv__sep { color: var(--c-border); margin: 0 2px; }
+.rv__current { color: var(--c-text); font-weight: 600; }
+
+.rv__layout { display: flex; flex: 1; overflow: hidden; }
+
+/* --- Left sidebar --- */
+.rv__sidebar {
+  width: 300px; min-width: 300px;
+  border-right: 1px solid var(--c-border);
+  background: var(--c-surface);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+
+.rv__tabs {
+  display: flex;
+  border-bottom: 1px solid var(--c-border);
+  flex-shrink: 0;
+}
+.rv__tab {
+  flex: 1; padding: var(--sp-sm) var(--sp-xs);
+  font-size: var(--fs-xs); font-family: var(--ff);
+  background: none; border: none; color: var(--c-muted);
+  cursor: pointer; border-bottom: 2px solid transparent;
+  text-transform: uppercase; letter-spacing: .03em;
+  transition: color .1s, border-color .1s;
+}
+.rv__tab:hover { color: var(--c-text); }
+.rv__tab.active { color: var(--c-accent); border-bottom-color: var(--c-accent); }
+.rv__tab-count {
+  font-size: 10px; font-weight: 700;
+  background: rgba(255,255,255,.08); border-radius: var(--r-pill);
+  padding: 1px 5px; margin-left: 2px;
+}
+
+.rv__panels { flex: 1; overflow-y: auto; }
+.rv__panel { padding: var(--sp-sm); }
+.rv__panel.hidden { display: none; }
+
+.rv__empty { padding: var(--sp-lg); text-align: center; }
+
+.rv__sidebar-footer {
+  flex-shrink: 0;
+  padding: var(--sp-sm);
+  border-top: 1px solid var(--c-border);
+}
+
+/* --- Thumbnails --- */
+.rv-thumb {
+  margin-bottom: var(--sp-sm);
+  border: 2px solid var(--c-border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color .15s;
+}
+.rv-thumb:hover { border-color: var(--c-muted); }
+.rv-thumb.selected { border-color: var(--c-accent); }
+.rv-thumb.accepted { opacity: .35; pointer-events: none; position: relative; }
+.rv-thumb.accepted::after {
+  content: 'Accepted';
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(63,185,80,.15);
+  color: var(--c-pass); font-weight: 600; font-size: var(--fs-sm);
+  letter-spacing: .03em;
+}
+
+.rv-thumb__wrap { position: relative; }
+.rv-thumb__img { width: 100%; display: block; }
+
+.rv-thumb__label {
+  padding: var(--sp-xs) var(--sp-sm);
+  background: var(--c-surface);
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-xs);
+}
+.rv-thumb__name {
+  font-size: var(--fs-xs); font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rv-thumb__meta {
+  font-size: 10px; color: var(--c-muted);
+  white-space: nowrap;
+}
+
+/* --- 3-zone hover overlay --- */
+.rv-thumb__overlay {
+  position: absolute; inset: 0;
+  display: none;
+  grid-template-rows: 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
+}
+.rv-thumb:hover .rv-thumb__overlay { display: grid; }
+
+.rv-zone {
+  display: flex; align-items: center; justify-content: center;
+  font-size: var(--fs-xs); font-weight: 700;
+  text-transform: uppercase; letter-spacing: .05em;
+  color: rgba(255,255,255,.9);
+  text-shadow: 0 1px 3px rgba(0,0,0,.6);
+  transition: backdrop-filter .1s;
+  cursor: pointer;
+}
+.rv-zone--diff {
+  grid-column: 1 / -1;
+  background: rgba(210,153,34,.4);
+}
+.rv-zone--diff:hover { background: rgba(210,153,34,.65); }
+
+.rv-zone--baseline {
+  background: rgba(63,185,80,.4);
+}
+.rv-zone--baseline:hover { background: rgba(63,185,80,.65); }
+
+.rv-zone--actual {
+  background: rgba(248,81,73,.4);
+}
+.rv-zone--actual:hover { background: rgba(248,81,73,.65); }
+
+/* --- Accept button (on thumbnails) --- */
+.rv-accept-btn {
+  display: none;
+  position: absolute; bottom: var(--sp-xs); right: var(--sp-xs);
+  padding: 3px 10px;
+  font-size: var(--fs-xs); font-family: var(--ff); font-weight: 600;
+  background: var(--c-pass); color: #fff;
+  border: none; border-radius: var(--r-pill);
+  cursor: pointer; z-index: 2;
+  transition: filter .1s;
+}
+.rv-thumb:hover .rv-accept-btn { display: block; }
+.rv-accept-btn:hover { filter: brightness(1.15); }
+
+/* --- Accept All button --- */
+.rv-accept-all {
+  width: 100%; padding: var(--sp-sm) var(--sp-md);
+  font-size: var(--fs-sm); font-family: var(--ff); font-weight: 600;
+  background: var(--c-changed-bg); color: var(--c-changed);
+  border: 1px solid rgba(210,153,34,.3); border-radius: var(--r-md);
+  cursor: pointer; transition: all .15s;
+}
+.rv-accept-all:hover { background: rgba(210,153,34,.25); border-color: var(--c-changed); }
+.rv-accept-all:disabled { opacity: .6; cursor: default; }
+.rv-accept-all--done { background: var(--c-pass-bg); color: var(--c-pass); border-color: rgba(63,185,80,.3); }
+
+/* --- Right preview column --- */
+.rv__preview {
+  flex: 1; display: flex;
+  align-items: center; justify-content: center;
+  background: var(--c-bg);
+  padding: var(--sp-md);
+  overflow: hidden;
+  position: relative;
+}
+.rv__preview img {
+  max-width: 100%; max-height: 100%;
+  object-fit: contain;
+  border-radius: var(--r-sm);
+}
+.rv__preview-empty {
+  display: flex; align-items: center; justify-content: center;
+}
+.rv__preview-label {
+  position: absolute; bottom: var(--sp-sm); left: 50%; transform: translateX(-50%);
+  font-size: var(--fs-xs); color: var(--c-muted);
+  background: rgba(22,27,34,.85); padding: 2px 10px; border-radius: var(--r-pill);
+  letter-spacing: .03em;
+}
+`;
+
+// ---------------------------------------------------------------------------
+// Accept handlers
+// ---------------------------------------------------------------------------
+
+function resolveProjectDir(
+    configMap: Map<string, ServeProjectConfig>,
+    projectName: string,
+): { megatestDir: string } | null {
+    const projConfig = configMap.get(projectName);
+    if (!projConfig) return null;
+    return { megatestDir: path.join(path.resolve(projConfig.path), '.megatest') };
+}
+
+const SAFE_SLUG = /^[a-zA-Z0-9_-]+$/;
+
+async function handleAccept(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+    megatestDir: string,
+    commitHash: string,
+): Promise<void> {
+    try {
+        const body = await parseJsonBody(req);
+        const cp = body.checkpoint as string;
+        const vp = body.viewport as string;
+
+        if (!cp || !vp || !SAFE_SLUG.test(cp) || !SAFE_SLUG.test(vp)) {
+            jsonReply(res, 400, { ok: false, error: 'Invalid checkpoint or viewport' });
+            return;
+        }
+
+        const commitDir = path.join(megatestDir, 'reports', commitHash);
+        const reviewData = loadReviewData(megatestDir, commitDir);
+        const ext = reviewData?.extension ?? '.png';
+
+        const src = path.join(commitDir, `${cp}-${vp}-actual${ext}`);
+        const dest = path.join(megatestDir, 'baselines', `${cp}-${vp}${ext}`);
+
+        // Path traversal protection
+        if (!src.startsWith(path.join(megatestDir, 'reports') + path.sep)) {
+            jsonReply(res, 403, { ok: false, error: 'Forbidden' });
+            return;
+        }
+        if (!dest.startsWith(path.join(megatestDir, 'baselines') + path.sep)) {
+            jsonReply(res, 403, { ok: false, error: 'Forbidden' });
+            return;
+        }
+
+        if (!fs.existsSync(src)) {
+            jsonReply(res, 404, { ok: false, error: 'Actual screenshot not found' });
+            return;
+        }
+
+        fs.mkdirSync(path.dirname(dest), { recursive: true });
+        fs.copyFileSync(src, dest);
+        jsonReply(res, 200, { ok: true });
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        jsonReply(res, 400, { ok: false, error: msg });
+    }
+}
+
+async function handleAcceptAll(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+    megatestDir: string,
+    commitHash: string,
+): Promise<void> {
+    try {
+        // Consume body even if empty
+        await parseJsonBody(req);
+
+        const commitDir = path.join(megatestDir, 'reports', commitHash);
+        const reviewData = loadReviewData(megatestDir, commitDir);
+        if (!reviewData) {
+            jsonReply(res, 404, { ok: false, error: 'No review data found' });
+            return;
+        }
+
+        const ext = reviewData.extension;
+        const baselinesDir = path.join(megatestDir, 'baselines');
+        fs.mkdirSync(baselinesDir, { recursive: true });
+
+        let accepted = 0;
+        for (const cp of reviewData.checkpoints) {
+            if (cp.status !== 'fail' && cp.status !== 'new') continue;
+            if (!SAFE_SLUG.test(cp.checkpoint) || !SAFE_SLUG.test(cp.viewport)) continue;
+            const slug = `${cp.checkpoint}-${cp.viewport}`;
+            const src = path.join(commitDir, `${slug}-actual${ext}`);
+            const dest = path.join(baselinesDir, `${slug}${ext}`);
+
+            if (fs.existsSync(src)) {
+                fs.copyFileSync(src, dest);
+                accepted++;
+            }
+        }
+
+        jsonReply(res, 200, { ok: true, accepted });
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        jsonReply(res, 400, { ok: false, error: msg });
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Static file server
@@ -482,7 +1198,6 @@ function serveFile(res: http.ServerResponse, filePath: string): void {
 // ---------------------------------------------------------------------------
 
 function createHandler(config: ServeConfig) {
-    // Build project lookup from config (not discovery) so it includes all configured projects
     const configMap = new Map<string, ServeProjectConfig>();
     for (const p of config.projects) {
         configMap.set(p.name, p);
@@ -494,11 +1209,72 @@ function createHandler(config: ServeConfig) {
 
         // Dashboard
         if (pathname === '/' || pathname === '') {
-            // Re-discover on each request so new reports appear on refresh
             const freshProjects = discoverProjects(config.projects);
             const html = renderDashboard(config.title, freshProjects);
             res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
             res.end(html);
+            return;
+        }
+
+        // Review page: /projects/<name>/reports/<commit>/review
+        const reviewMatch = pathname.match(/^\/projects\/([^/]+)\/reports\/([^/]+)\/review$/);
+        if (reviewMatch && req.method === 'GET') {
+            const projectName = reviewMatch[1];
+            const commitHash = reviewMatch[2];
+            const proj = resolveProjectDir(configMap, projectName);
+            if (!proj) {
+                res.writeHead(404, { 'Content-Type': 'text/plain' });
+                res.end('Project not found');
+                return;
+            }
+            const commitDir = path.join(proj.megatestDir, 'reports', commitHash);
+            if (!fs.existsSync(commitDir)) {
+                res.writeHead(404, { 'Content-Type': 'text/plain' });
+                res.end('Report not found');
+                return;
+            }
+            const data = loadReviewData(proj.megatestDir, commitDir);
+            if (!data) {
+                res.writeHead(404, { 'Content-Type': 'text/plain' });
+                res.end('No review data');
+                return;
+            }
+            let meta: ReportMeta | null = null;
+            try {
+                const metaPath = path.join(commitDir, 'meta.json');
+                if (fs.existsSync(metaPath)) {
+                    meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8')) as ReportMeta;
+                }
+            } catch {
+                // Ignore
+            }
+            const html = renderReviewPage(projectName, commitHash, data, meta, config.title);
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end(html);
+            return;
+        }
+
+        // Accept single: POST /projects/<name>/reports/<commit>/accept
+        const acceptMatch = pathname.match(/^\/projects\/([^/]+)\/reports\/([^/]+)\/accept$/);
+        if (acceptMatch && req.method === 'POST') {
+            const proj = resolveProjectDir(configMap, acceptMatch[1]);
+            if (!proj) {
+                jsonReply(res, 404, { ok: false, error: 'Project not found' });
+                return;
+            }
+            handleAccept(req, res, proj.megatestDir, acceptMatch[2]).catch(() => {});
+            return;
+        }
+
+        // Accept all: POST /projects/<name>/reports/<commit>/accept-all
+        const acceptAllMatch = pathname.match(/^\/projects\/([^/]+)\/reports\/([^/]+)\/accept-all$/);
+        if (acceptAllMatch && req.method === 'POST') {
+            const proj = resolveProjectDir(configMap, acceptAllMatch[1]);
+            if (!proj) {
+                jsonReply(res, 404, { ok: false, error: 'Project not found' });
+                return;
+            }
+            handleAcceptAll(req, res, proj.megatestDir, acceptAllMatch[2]).catch(() => {});
             return;
         }
 
@@ -521,8 +1297,6 @@ function createHandler(config: ServeConfig) {
         }
 
         const megatestDir = path.join(path.resolve(projConfig.path), '.megatest');
-
-        // Map to filesystem: /projects/<name>/X → <repo>/.megatest/X
         const fsPath = path.resolve(megatestDir, relativePath);
 
         // Path traversal protection

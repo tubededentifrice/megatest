@@ -37,6 +37,16 @@ export interface ReportMeta {
     totalCheckpoints: number;
 }
 
+export interface ReviewCheckpoint {
+    workflow: string;
+    checkpoint: string;
+    viewport: string;
+    status: CheckpointStatus;
+    diffPercent: number | null;
+    diffPixels: number | null;
+    error: string | null;
+}
+
 export interface ServeProjectConfig {
     name: string;
     path: string;
