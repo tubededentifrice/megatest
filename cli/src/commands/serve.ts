@@ -1144,6 +1144,17 @@ async function handleAccept(
 
         fs.mkdirSync(path.dirname(dest), { recursive: true });
         fs.copyFileSync(src, dest);
+
+        // Update results.json so refreshes reflect the acceptance
+        if (reviewData) {
+            const match = reviewData.checkpoints.find((c) => c.checkpoint === cp && c.viewport === vp);
+            if (match) {
+                match.status = 'pass';
+                const resultsPath = path.join(commitDir, 'results.json');
+                fs.writeFileSync(resultsPath, JSON.stringify(reviewData, null, 2));
+            }
+        }
+
         jsonReply(res, 200, { ok: true });
     } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unknown error';
@@ -1182,9 +1193,14 @@ async function handleAcceptAll(
 
             if (fs.existsSync(src)) {
                 fs.copyFileSync(src, dest);
+                cp.status = 'pass';
                 accepted++;
             }
         }
+
+        // Persist updated statuses so refreshes reflect the acceptance
+        const resultsPath = path.join(commitDir, 'results.json');
+        fs.writeFileSync(resultsPath, JSON.stringify(reviewData, null, 2));
 
         jsonReply(res, 200, { ok: true, accepted });
     } catch (err) {
