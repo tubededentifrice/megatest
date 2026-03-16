@@ -984,8 +984,7 @@ ${CSS_TOKENS}
 .rv-thumb__img {
   width: 100%; height: 100%;
   display: block;
-  object-fit: cover;
-  object-position: top center;
+  object-fit: contain;
 }
 
 .rv-thumb__label {
@@ -1054,11 +1053,11 @@ ${CSS_TOKENS}
 .rv-accept-all {
   width: 100%; padding: var(--sp-sm) var(--sp-md);
   font-size: var(--fs-sm); font-family: var(--ff); font-weight: 600;
-  background: var(--c-changed-bg); color: var(--c-changed);
-  border: 1px solid rgba(210,153,34,.3); border-radius: var(--r-md);
+  background: var(--c-pass); color: #fff;
+  border: none; border-radius: var(--r-md);
   cursor: pointer; transition: all .15s;
 }
-.rv-accept-all:hover { background: rgba(210,153,34,.25); border-color: var(--c-changed); }
+.rv-accept-all:hover { filter: brightness(1.1); }
 .rv-accept-all:disabled { opacity: .6; cursor: default; }
 .rv-accept-all--done { background: var(--c-pass-bg); color: var(--c-pass); border-color: rgba(63,185,80,.3); }
 
