@@ -517,12 +517,29 @@ ${passedRows}
     const timestamp = result.timestamp;
     const durationSec = (result.duration / 1000).toFixed(1);
 
+    // Preload links for failed/new checkpoint images so they load immediately
+    const preloadLinks = [...failed, ...newCps]
+        .flatMap((cp) => {
+            const paths: string[] = [];
+            if (cp.status === 'fail') {
+                paths.push(`${cp.checkpoint}-${cp.viewport}-baseline${extension}`);
+                paths.push(getImagePath(cp, 'actual', extension));
+                paths.push(getImagePath(cp, 'diff', extension));
+            } else {
+                paths.push(getImagePath(cp, 'actual', extension));
+            }
+            return paths;
+        })
+        .map((href) => `  <link rel="preload" as="image" href="${escapeHtml(href)}">`)
+        .join('\n');
+
     const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Megatest Report &mdash; ${escapeHtml(result.commitHash)}</title>
+${preloadLinks}
   <style>
 ${CSS}
   </style>
