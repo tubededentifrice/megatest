@@ -1008,7 +1008,7 @@ ${CSS_TOKENS}
 .rv-thumb__overlay {
   position: absolute; inset: 0;
   display: none;
-  grid-template-rows: 1fr 1fr;
+  grid-template-rows: 1fr 2fr;
   grid-template-columns: 1fr 1fr;
 }
 .rv-thumb:hover .rv-thumb__overlay { display: grid; }
