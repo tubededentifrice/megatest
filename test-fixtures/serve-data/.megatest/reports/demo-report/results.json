@@ -1,0 +1,86 @@
+{
+  "extension": ".png",
+  "checkpoints": [
+    {
+      "workflow": "homepage",
+      "checkpoint": "homepage-hero",
+      "viewport": "desktop",
+      "status": "pass",
+      "diffPercent": 0,
+      "diffPixels": 0,
+      "error": null
+    },
+    {
+      "workflow": "homepage",
+      "checkpoint": "homepage-hero",
+      "viewport": "mobile",
+      "status": "pass",
+      "diffPercent": 0,
+      "diffPixels": 0,
+      "error": null
+    },
+    {
+      "workflow": "homepage",
+      "checkpoint": "homepage-footer",
+      "viewport": "desktop",
+      "status": "pass",
+      "diffPercent": 0,
+      "diffPixels": 0,
+      "error": null
+    },
+    {
+      "workflow": "settings",
+      "checkpoint": "settings-general",
+      "viewport": "desktop",
+      "status": "pass",
+      "diffPercent": 0,
+      "diffPixels": 0,
+      "error": null
+    },
+    {
+      "workflow": "dashboard",
+      "checkpoint": "dashboard-stats",
+      "viewport": "desktop",
+      "status": "fail",
+      "diffPercent": 8.52,
+      "diffPixels": 78182,
+      "error": null
+    },
+    {
+      "workflow": "dashboard",
+      "checkpoint": "dashboard-stats",
+      "viewport": "mobile",
+      "status": "fail",
+      "diffPercent": 7.38,
+      "diffPixels": 22476,
+      "error": null
+    },
+    {
+      "workflow": "login",
+      "checkpoint": "login-form",
+      "viewport": "desktop",
+      "status": "fail",
+      "diffPercent": 47.22,
+      "diffPixels": 435340,
+      "error": null
+    },
+    {
+      "workflow": "notifications",
+      "checkpoint": "notifications-panel",
+      "viewport": "desktop",
+      "status": "new",
+      "diffPercent": null,
+      "diffPixels": null,
+      "error": null
+    },
+    {
+      "workflow": "notifications",
+      "checkpoint": "notifications-panel",
+      "viewport": "mobile",
+      "status": "new",
+      "diffPercent": null,
+      "diffPixels": null,
+      "error": null
+    }
+  ]
+}

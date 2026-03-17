@@ -1,8 +1,7 @@
 name: default
-description: All visual regression tests
+description: Visual regression tests for the megatest serve UI
 workflows:
-  - homepage
   - dashboard
-  - login
-  - notifications
-  - settings
+  - review-diffs
+  - review-new
+  - review-passed

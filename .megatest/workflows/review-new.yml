@@ -1,0 +1,8 @@
+name: review-new
+description: Review page - New tab
+steps:
+  - open: /projects/megatest-demo/reports/demo-report/review
+  - wait: 500
+  - click: { role: "button", name: "New" }
+  - wait: 300
+  - screenshot: review-new-tab

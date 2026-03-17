@@ -1,0 +1,8 @@
+name: review-passed
+description: Review page - Passed tab
+steps:
+  - open: /projects/megatest-demo/reports/demo-report/review
+  - wait: 500
+  - click: { role: "button", name: "Passed" }
+  - wait: 300
+  - screenshot: review-passed-tab

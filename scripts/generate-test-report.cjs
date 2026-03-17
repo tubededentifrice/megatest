@@ -14,9 +14,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
-const MEGATEST = path.join(ROOT, '.megatest');
-const BASELINES = path.join(MEGATEST, 'baselines');
-const REPORT_DIR = path.join(MEGATEST, 'reports', 'demo-report');
+const FIXTURE = path.join(ROOT, 'test-fixtures', 'serve-data', '.megatest');
+const BASELINES = path.join(FIXTURE, 'baselines');
+const REPORT_DIR = path.join(FIXTURE, 'reports', 'demo-report');
 
 // Ensure dirs exist
 for (const d of [BASELINES, REPORT_DIR]) {
@@ -284,4 +284,4 @@ const indexHtml = `<!DOCTYPE html>
 fs.writeFileSync(path.join(REPORT_DIR, 'index.html'), indexHtml);
 console.log('  index.html');
 
-console.log('\nDone! Report generated at .megatest/reports/demo-report/');
+console.log('\nDone! Report generated at test-fixtures/serve-data/.megatest/reports/demo-report/');

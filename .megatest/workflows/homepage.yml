@@ -1,8 +1,0 @@
-name: homepage
-description: Homepage visual checks
-steps:
-  - open: /
-  - wait: 500
-  - screenshot: homepage-hero
-  - scroll: { down: 500 }
-  - screenshot: homepage-footer

@@ -1,6 +1,6 @@
 name: dashboard
-description: Dashboard stats page
+description: Serve UI dashboard page
 steps:
-  - open: /dashboard
+  - open: /
   - wait: 500
-  - screenshot: dashboard-stats
+  - screenshot: dashboard-full

@@ -1,6 +1,0 @@
-name: notifications
-description: Notifications panel
-steps:
-  - open: /notifications
-  - wait: 500
-  - screenshot: notifications-panel

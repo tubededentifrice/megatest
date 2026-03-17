@@ -1,0 +1,6 @@
+name: review-diffs
+description: Review page - Differences tab
+steps:
+  - open: /projects/megatest-demo/reports/demo-report/review
+  - wait: 500
+  - screenshot: review-diffs-tab

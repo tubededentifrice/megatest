@@ -1,6 +1,0 @@
-name: settings
-description: Settings page
-steps:
-  - open: /settings
-  - wait: 500
-  - screenshot: settings-general

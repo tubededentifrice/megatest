@@ -1,6 +1,0 @@
-name: login
-description: Login form page
-steps:
-  - open: /login
-  - wait: 500
-  - screenshot: login-form
