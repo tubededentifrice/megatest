@@ -599,6 +599,11 @@ ${REVIEW_CSS}
           </button>
         </div>
 
+        <div class="rv__search">
+          <input type="text" class="rv__search-input" id="search-input"
+                 placeholder="Filter screenshots..." autocomplete="off" spellcheck="false">
+        </div>
+
         <div class="rv__panels">
           <div class="rv__panel${defaultTab === 'diff' ? '' : ' hidden'}" id="tab-diff">
             ${diffThumbs || '<div class="rv__empty muted text-xs">No differences</div>'}
@@ -646,6 +651,33 @@ ${REVIEW_CSS}
       tabs.forEach(function(t) { t.classList.toggle('active', t.dataset.tab === target); });
       panels.forEach(function(p) { p.classList.toggle('hidden', p.id !== 'tab-' + target); });
     });
+  });
+
+  // --- Search filter ---
+  var searchInput = document.getElementById('search-input');
+  function applySearch() {
+    var raw = searchInput.value.toLowerCase().trim();
+    var words = raw ? raw.split(/\\s+/) : [];
+    document.querySelectorAll('.rv-thumb').forEach(function(thumb) {
+      var slug = thumb.dataset.slug.toLowerCase();
+      var match = words.every(function(w) { return slug.indexOf(w) !== -1; });
+      thumb.style.display = match ? '' : 'none';
+    });
+  }
+  searchInput.addEventListener('input', applySearch);
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && document.activeElement === searchInput) {
+      searchInput.value = '';
+      applySearch();
+      searchInput.blur();
+      return;
+    }
+    if ((e.key === 'k' && (e.metaKey || e.ctrlKey)) || (e.key === '/' && document.activeElement.tagName !== 'INPUT')) {
+      e.preventDefault();
+      searchInput.focus();
+      searchInput.select();
+    }
   });
 
   // --- Preview ---
@@ -941,6 +973,22 @@ ${CSS_TOKENS}
   background: rgba(255,255,255,.08); border-radius: var(--r-pill);
   padding: 1px 5px; margin-left: 2px;
 }
+
+.rv__search {
+  padding: var(--sp-xs) var(--sp-sm);
+  border-bottom: 1px solid var(--c-border);
+  flex-shrink: 0;
+}
+.rv__search-input {
+  width: 100%; box-sizing: border-box;
+  padding: var(--sp-xs) var(--sp-sm);
+  font-size: var(--fs-xs); font-family: var(--ff);
+  background: var(--c-bg); color: var(--c-text);
+  border: 1px solid var(--c-border); border-radius: var(--r-md);
+  outline: none;
+}
+.rv__search-input:focus { border-color: var(--c-accent); }
+.rv__search-input::placeholder { color: var(--c-muted); }
 
 .rv__panels { flex: 1; overflow-y: auto; }
 .rv__panel {
