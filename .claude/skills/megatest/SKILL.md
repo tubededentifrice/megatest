@@ -28,6 +28,12 @@ Parse `$ARGUMENTS` to extract:
 - `focus_text` (optional): Specific area to focus on (e.g., `"login flow"`, `"checkout"`)
 - `--plan <name>` (optional): Name for the plan to create/update (default: `default`)
 
+## Custom Instructions
+
+Before doing anything else, check if `<repo_path>/.megatest/INSTRUCTIONS.md` exists. If it does, read it with the Read tool and **follow all instructions within it** for the duration of this session. These instructions contain project-specific knowledge learned from previous runs — things like TOTP handling, fragile locators, authentication quirks, timing issues, and user preferences.
+
+This file takes priority over the generic guidance in this skill definition when they conflict.
+
 ## Mode Detection
 
 Read `.megatest/state.json` in the target repo:
@@ -45,11 +51,24 @@ Use the Write tool to create:
 ```
 <repo_path>/.megatest/
   config.yml
+  INSTRUCTIONS.md
   workflows/          (empty, will be populated)
   includes/           (empty, will be populated)
   plans/              (empty, will be populated)
   baselines/          (empty)
   .gitignore
+```
+
+**INSTRUCTIONS.md** (starter template):
+```markdown
+# Megatest Instructions
+
+Project-specific instructions for the /megatest skill.
+This file is automatically maintained — edit freely, and the skill will also update it when it learns something new.
+
+## Notes
+
+(none yet)
 ```
 
 **config.yml** (adapt viewports/variables to the project):
@@ -206,7 +225,11 @@ Get the commit SHA:
 git -C <repo_path> rev-parse HEAD
 ```
 
-### Step 8: Validate
+### Step 8: Update Custom Instructions
+
+Evaluate whether to update `INSTRUCTIONS.md`. See [Updating Custom Instructions](#updating-custom-instructions) below.
+
+### Step 9: Validate
 
 Run the validator to confirm syntax:
 ```bash
@@ -253,7 +276,11 @@ Add any new workflow names to `plans/default.yml`.
 
 Update `last_plan_commit` and `last_plan_update`.
 
-### Step 7: Validate
+### Step 7: Update Custom Instructions
+
+Evaluate whether to update `INSTRUCTIONS.md`. See [Updating Custom Instructions](#updating-custom-instructions) below.
+
+### Step 8: Validate
 
 ```bash
 node ~/git/megatest/cli/bin/megatest.js validate --repo <repo_path>
@@ -275,6 +302,53 @@ node ~/git/megatest/cli/bin/megatest.js validate --repo <repo_path>
 - `${VAR_NAME}` → resolved from config.yml `variables` section
 - `${env:VAR_NAME}` → resolved from environment variables at runtime
 - Use variables for anything that might change between environments (credentials, URLs, test data)
+
+## Updating Custom Instructions
+
+This section is referenced by both Bootstrap and Incremental modes. At the end of a session, evaluate whether `INSTRUCTIONS.md` needs updating.
+
+### When to update
+
+- **You struggled with something** — retries, unexpected UI, workarounds needed, failed locators, TOTP/2FA flows, timeouts, animations interfering with screenshots, flaky elements, unexpected modals/popups, cookie consent banners, etc.
+- **The user gave explicit guidance** — "always do X in this project", "this site uses Y for auth", "ignore the banner on Z page", "wait longer after navigation", etc.
+
+### When NOT to update
+
+- Everything went smoothly with no difficulties or special user guidance. **Do not update just because a run completed** — only write when there's something genuinely useful for future runs to know.
+
+### How to update
+
+1. Read the existing `<repo_path>/.megatest/INSTRUCTIONS.md`
+2. Determine what new knowledge was gained this session
+3. Add or modify entries under clear section headings. Good section names:
+   - `## Authentication` — login flows, TOTP, session handling
+   - `## Timing` — pages that need extra waits, slow-loading elements
+   - `## Flaky Elements` — elements that change between runs, animations to disable
+   - `## Project Quirks` — cookie banners, modals, redirects, special behaviors
+   - `## Locator Notes` — preferred locator strategies for specific elements
+   - `## User Preferences` — explicit user guidance about how to generate configs
+   - Or any other heading that fits the situation
+4. Keep entries **concise and actionable** — write instructions, not narratives
+5. **Don't duplicate** existing instructions — update them if they've changed
+6. Preserve the header and any user-written content
+
+**Example entries:**
+```markdown
+## Authentication
+
+- This site uses TOTP. After filling email/password, wait for the TOTP input field (label: "Verification code"). Use `${TOTP_SECRET}` variable with an eval step to generate the code.
+- Session expires after 15 minutes of inactivity — re-login if workflows are long.
+
+## Timing
+
+- The dashboard page loads data asynchronously. Wait at least 2000ms after navigation before screenshotting.
+- Chart animations take ~1500ms to complete on the analytics page.
+
+## Project Quirks
+
+- A cookie consent banner appears on first visit. Dismiss it by clicking the "Accept" button (role: button, name: "Accept") before taking screenshots.
+- The /settings page redirects to /settings/profile — use the redirect target in workflow open steps.
+```
 
 ## Output
 
