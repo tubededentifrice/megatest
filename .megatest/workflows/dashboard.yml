@@ -1,0 +1,6 @@
+name: dashboard
+description: Dashboard stats page
+steps:
+  - open: /dashboard
+  - wait: 500
+  - screenshot: dashboard-stats

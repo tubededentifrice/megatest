@@ -4,6 +4,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./serve.config.yml:/app/serve.config.yml:ro
+      - /home/ubuntu/git/megatest/.megatest:/data/megatest/.megatest
       - /home/ubuntu/git/fj2/.megatest:/data/fj2/.megatest
     networks:
       - traefik-proxy

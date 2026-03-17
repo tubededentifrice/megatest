@@ -1,0 +1,11 @@
+version: "1"
+defaults:
+  viewport: { width: 1280, height: 720 }
+  threshold: 0.1
+  waitAfterNavigation: "1000"
+  screenshotMode: viewport
+  timeout: 30000
+viewports:
+  desktop: { width: 1280, height: 720 }
+  mobile: { width: 375, height: 812 }
+variables: {}

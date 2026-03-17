@@ -1,0 +1,8 @@
+name: default
+description: All visual regression tests
+workflows:
+  - homepage
+  - dashboard
+  - login
+  - notifications
+  - settings
