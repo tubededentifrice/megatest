@@ -67,5 +67,41 @@ export async function runAccept(repoPath: string, checkpoint?: string): Promise<
     }
 
     console.log(`\n${accepted} baseline${accepted !== 1 ? 's' : ''} accepted`);
+
+    // Update the latest report's results.json so the serve app reflects acceptance
+    const reportsDir = path.join(megatestDir, 'reports');
+    if (fs.existsSync(reportsDir)) {
+        const reportDirs = fs
+            .readdirSync(reportsDir, { withFileTypes: true })
+            .filter((d) => d.isDirectory())
+            .map((d) => ({ name: d.name, mtime: fs.statSync(path.join(reportsDir, d.name)).mtimeMs }))
+            .sort((a, b) => b.mtime - a.mtime);
+
+        if (reportDirs.length > 0) {
+            const resultsPath = path.join(reportsDir, reportDirs[0].name, 'results.json');
+            if (fs.existsSync(resultsPath)) {
+                try {
+                    const reviewData = JSON.parse(fs.readFileSync(resultsPath, 'utf-8'));
+                    const acceptedSlugs = new Set(toAccept.map((f) => f.replace(ext, '')));
+                    let updated = 0;
+
+                    for (const cp of reviewData.checkpoints ?? []) {
+                        const slug = `${cp.checkpoint}-${cp.viewport}`;
+                        if (acceptedSlugs.has(slug)) {
+                            cp.status = 'pass';
+                            updated++;
+                        }
+                    }
+
+                    if (updated > 0) {
+                        fs.writeFileSync(resultsPath, JSON.stringify(reviewData, null, 2));
+                    }
+                } catch {
+                    // Non-critical: serve app will still work via filesystem fallback
+                }
+            }
+        }
+    }
+
     return 0;
 }
