@@ -122,7 +122,15 @@ async function runSinglePair(
     let stepFailed = false;
     let hasExplicitScroll = false;
     for (let i = 0; i < resolvedSteps.length; i++) {
-        const step = resolvedSteps[i];
+        // Interpolate variables per-step so TOTP codes are fresh at execution time
+        const { step: interpolatedStep, warnings: interpWarnings } = interpolateStep(
+            resolvedSteps[i],
+            config.config.variables,
+        );
+        for (const w of interpWarnings) {
+            console.warn(`  \u26A0 ${workflowName}: ${w}`);
+        }
+        const step = interpolatedStep;
         const stepType = Object.keys(step)[0];
         const stepData = (step as unknown as Record<string, unknown>)[stepType];
 
@@ -272,14 +280,7 @@ export async function runEngine(opts: EngineOptions): Promise<CheckpointResult[]
             let resolvedSteps: Step[];
             try {
                 resolvedSteps = resolveIncludes(workflow.steps, config.includes);
-                const variables = config.config.variables;
-                resolvedSteps = resolvedSteps.map((step) => {
-                    const { step: interpolated, warnings } = interpolateStep(step, variables);
-                    for (const w of warnings) {
-                        console.warn(`  \u26A0 ${workflowName}: ${w}`);
-                    }
-                    return interpolated;
-                });
+                // Variables are interpolated per-step at execution time (for TOTP freshness)
             } catch (err: unknown) {
                 const message = err instanceof Error ? err.message : String(err);
                 console.error(`Error resolving includes for workflow "${workflowName}": ${message}`);
@@ -356,15 +357,8 @@ export async function runEngine(opts: EngineOptions): Promise<CheckpointResult[]
         if (config.config.teardown && config.config.teardown.length > 0) {
             console.log('\n  Teardown: running cleanup steps...');
             try {
-                let teardownSteps = resolveIncludes(config.config.teardown, config.includes);
-                const variables = config.config.variables;
-                teardownSteps = teardownSteps.map((step) => {
-                    const { step: interpolated, warnings } = interpolateStep(step, variables);
-                    for (const w of warnings) {
-                        console.warn(`  \u26A0 teardown: ${w}`);
-                    }
-                    return interpolated;
-                });
+                const teardownSteps = resolveIncludes(config.config.teardown, config.includes);
+                // Variables are interpolated per-step at execution time (for TOTP freshness)
 
                 const defaultVp = config.config.defaults.viewport;
                 const context = await createContext(browser, defaultVp);
@@ -383,7 +377,10 @@ export async function runEngine(opts: EngineOptions): Promise<CheckpointResult[]
                     };
 
                     for (let i = 0; i < teardownSteps.length; i++) {
-                        const step = teardownSteps[i];
+                        const { step, warnings } = interpolateStep(teardownSteps[i], config.config.variables);
+                        for (const w of warnings) {
+                            console.warn(`  \u26A0 teardown: ${w}`);
+                        }
                         const stepType = Object.keys(step)[0];
                         await executeStep(page, step, stepCtx);
                         console.log(`  Teardown: step ${i + 1}/${teardownSteps.length} (${stepType}) done`);

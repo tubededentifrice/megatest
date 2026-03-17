@@ -301,7 +301,28 @@ node ~/git/megatest/cli/bin/megatest.js validate --repo <repo_path>
 
 - `${VAR_NAME}` → resolved from config.yml `variables` section
 - `${env:VAR_NAME}` → resolved from environment variables at runtime
+- `${totp:VAR_NAME}` → generates a 6-digit TOTP code from a base32 secret stored in `variables`
+- `${totp:env:VAR_NAME}` → generates a 6-digit TOTP code from a base32 secret in an environment variable
 - Use variables for anything that might change between environments (credentials, URLs, test data)
+- TOTP codes are generated fresh at step execution time (not upfront), so they won't expire during long workflows
+
+**TOTP example** (for sites with TOTP-based MFA):
+```yaml
+# config.yml
+variables:
+  OTP_SECRET: JBSWY3DPEHPK3PXP  # base32-encoded TOTP secret
+
+# includes/login-with-totp.yml
+steps:
+  - open: /login
+  - fill: { label: "Email", value: "${TEST_USER}" }
+  - fill: { label: "Password", value: "${TEST_PASS}" }
+  - click: { role: "button", name: "Sign in" }
+  - wait: 2000
+  - fill: { placeholder: "000000", value: "${totp:OTP_SECRET}" }
+  - click: { role: "button", name: "Verify" }
+  - wait: 2000
+```
 
 ## Updating Custom Instructions
 
@@ -336,7 +357,7 @@ This section is referenced by both Bootstrap and Incremental modes. At the end o
 ```markdown
 ## Authentication
 
-- This site uses TOTP. After filling email/password, wait for the TOTP input field (label: "Verification code"). Use `${TOTP_SECRET}` variable with an eval step to generate the code.
+- This site uses TOTP. After filling email/password, wait for the TOTP input field and use `${totp:OTP_SECRET}` to generate the code. Store the base32 secret in config.yml variables as `OTP_SECRET`.
 - Session expires after 15 minutes of inactivity — re-login if workflows are long.
 
 ## Timing

@@ -1,9 +1,12 @@
 import type { Step, Workflow } from './schema.js';
+import { generateTOTP } from './totp.js';
 
 /**
- * Replaces ${VAR_NAME} with values from the variables map,
- * and ${env:VAR_NAME} with process.env.VAR_NAME.
- * Returns the interpolated string and any warnings for unresolved variables.
+ * Replaces variable patterns in text:
+ *   ${totp:env:VAR} — TOTP code from env var secret
+ *   ${totp:VAR}     — TOTP code from variables map secret
+ *   ${env:VAR}      — raw value from env var
+ *   ${VAR}          — raw value from variables map
  */
 export function interpolateVariables(
     text: string,
@@ -11,8 +14,28 @@ export function interpolateVariables(
 ): { result: string; warnings: string[] } {
     const warnings: string[] = [];
 
-    // Replace ${env:VAR_NAME} first so they don't conflict with plain ${VAR_NAME}
-    let result = text.replace(/\$\{env:([^}]+)\}/g, (_match, varName: string) => {
+    // Replace ${totp:env:VAR_NAME} — generate TOTP from environment variable secret
+    let result = text.replace(/\$\{totp:env:([^}]+)\}/g, (_match, varName: string) => {
+        const secret = process.env[varName];
+        if (secret === undefined) {
+            warnings.push(`Environment variable not set for TOTP: ${varName}`);
+            return `\${totp:env:${varName}}`;
+        }
+        return generateTOTP(secret);
+    });
+
+    // Replace ${totp:VAR_NAME} — generate TOTP from variables map secret
+    result = result.replace(/\$\{totp:([^}:]+)\}/g, (_match, varName: string) => {
+        const secret = variables[varName];
+        if (secret === undefined) {
+            warnings.push(`Variable not defined for TOTP: ${varName}`);
+            return `\${totp:${varName}}`;
+        }
+        return generateTOTP(secret);
+    });
+
+    // Replace ${env:VAR_NAME} with environment variable value
+    result = result.replace(/\$\{env:([^}]+)\}/g, (_match, varName: string) => {
         const value = process.env[varName];
         if (value === undefined) {
             warnings.push(`Environment variable not set: ${varName}`);
