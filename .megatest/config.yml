@@ -7,5 +7,5 @@ defaults:
   timeout: 30000
 viewports:
   desktop: { width: 1280, height: 720 }
-  mobile: { width: 375, height: 812 }
+  # mobile: { width: 375, height: 812 }
 variables: {}
