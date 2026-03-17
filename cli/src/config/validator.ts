@@ -150,6 +150,51 @@ function detectCircularIncludes(config: LoadedConfig): { file: string; message: 
     return cycles;
 }
 
+/**
+ * Detects circular workflow dependencies using DFS.
+ */
+function detectCircularWorkflowDependencies(config: LoadedConfig): { file: string; message: string }[] {
+    const cycles: { file: string; message: string }[] = [];
+    const visited = new Set<string>();
+    const inStack = new Set<string>();
+    const pathStack: string[] = [];
+
+    function dfs(name: string): void {
+        if (inStack.has(name)) {
+            const cycleStart = pathStack.indexOf(name);
+            const cycle = [...pathStack.slice(cycleStart), name];
+            cycles.push({
+                file: `workflows/${name}.yml`,
+                message: `Circular workflow dependency detected: ${cycle.join(' -> ')}`,
+            });
+            return;
+        }
+        if (visited.has(name)) {
+            return;
+        }
+
+        visited.add(name);
+        inStack.add(name);
+        pathStack.push(name);
+
+        const workflow = config.workflows.get(name);
+        if (workflow?.depends_on) {
+            for (const dep of workflow.depends_on) {
+                dfs(dep);
+            }
+        }
+
+        pathStack.pop();
+        inStack.delete(name);
+    }
+
+    for (const name of config.workflows.keys()) {
+        dfs(name);
+    }
+
+    return cycles;
+}
+
 export function validate(config: LoadedConfig): ValidationError[] {
     const errors: ValidationError[] = [];
     const basePath = config.basePath;
@@ -214,6 +259,31 @@ export function validate(config: LoadedConfig): ValidationError[] {
                 message: 'Workflow must have at least one step',
                 severity: 'error',
             });
+        }
+
+        // Check depends_on references
+        if (workflow.depends_on) {
+            for (const dep of workflow.depends_on) {
+                if (typeof dep !== 'string') {
+                    errors.push({
+                        file: filePath,
+                        message: `"depends_on" entries must be strings`,
+                        severity: 'error',
+                    });
+                } else if (dep === name) {
+                    errors.push({
+                        file: filePath,
+                        message: 'Workflow cannot depend on itself',
+                        severity: 'error',
+                    });
+                } else if (!config.workflows.has(dep)) {
+                    errors.push({
+                        file: filePath,
+                        message: `Dependency "${dep}" not found in workflows`,
+                        severity: 'error',
+                    });
+                }
+            }
         }
 
         // Check include references in workflow steps
@@ -329,6 +399,16 @@ export function validate(config: LoadedConfig): ValidationError[] {
     // Detect circular includes
     const circularErrors = detectCircularIncludes(config);
     for (const err of circularErrors) {
+        errors.push({
+            file: err.file,
+            message: err.message,
+            severity: 'error',
+        });
+    }
+
+    // Detect circular workflow dependencies
+    const circularDeps = detectCircularWorkflowDependencies(config);
+    for (const err of circularDeps) {
         errors.push({
             file: err.file,
             message: err.message,

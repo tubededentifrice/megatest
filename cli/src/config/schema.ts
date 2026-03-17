@@ -84,6 +84,7 @@ export type Step =
 export interface Workflow {
     name: string;
     description?: string;
+    depends_on?: string[];
     steps: Step[];
 }
 

@@ -142,6 +142,20 @@ steps:
   - screenshot: homepage-footer
 ```
 
+**Workflow dependencies** — use `depends_on` when a workflow requires another to complete first (e.g., login must finish before authenticated pages run):
+
+```yaml
+name: dashboard
+description: Dashboard after login
+depends_on:
+  - login
+steps:
+  - open: /dashboard
+  - screenshot: dashboard-main
+```
+
+`depends_on` takes a list of workflow names. The engine runs workflows concurrently but won't start a workflow until all its dependencies have completed. If a dependency fails, dependents are automatically skipped. Use this whenever workflows share ordering constraints — for example, a data-setup workflow that must run before workflows that screenshot the resulting pages.
+
 **Naming conventions:**
 - Filenames: `[a-z0-9-]+.yml` (lowercase, hyphens only)
 - Filename MUST match the `name` field inside the file
@@ -296,6 +310,7 @@ node ~/git/megatest/cli/bin/megatest.js validate --repo <repo_path>
 6. **Always close the browser** when done: `mcp__playwright__browser_close`.
 7. **Run validate** after every config change.
 8. **Filenames must match name fields** — `homepage.yml` must contain `name: homepage`.
+9. **Use `depends_on`** when workflows have ordering requirements — e.g., authenticated flows should depend on the login workflow, flows that need setup data should depend on the setup workflow. Don't use `include: login` in every workflow when a dependency on a login workflow achieves the same result more efficiently.
 
 ## Variable Interpolation
 

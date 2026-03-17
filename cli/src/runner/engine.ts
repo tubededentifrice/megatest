@@ -254,6 +254,33 @@ async function runSinglePair(
     return results;
 }
 
+/** Tracks completion state of a workflow across all its viewport tasks */
+interface WorkflowState {
+    workflowName: string;
+    dependencies: Set<string>;
+    tasks: WorkTask[];
+    completedCount: number;
+    hasError: boolean;
+    released: boolean;
+}
+
+function makeErrorResult(workflow: string, viewport: string, error: string): CheckpointResult {
+    return {
+        workflow,
+        checkpoint: '*',
+        viewport,
+        status: 'error',
+        diffPercent: null,
+        diffPixels: null,
+        totalPixels: null,
+        dimensionMismatch: false,
+        baselinePath: null,
+        actualPath: null,
+        diffPath: null,
+        error,
+    };
+}
+
 export async function runEngine(opts: EngineOptions): Promise<CheckpointResult[]> {
     const { config, workflowNames, actualsDir } = opts;
     const results: CheckpointResult[] = [];
@@ -267,9 +294,11 @@ export async function runEngine(opts: EngineOptions): Promise<CheckpointResult[]
 
     try {
         const viewportEntries = Object.entries(config.config.viewports);
+        const runSet = new Set(workflowNames);
 
-        // Build work queue: resolve includes and interpolate variables upfront
-        const workQueue: WorkTask[] = [];
+        // --- Phase 1: Build workflow states, resolve includes ---
+        const states = new Map<string, WorkflowState>();
+
         for (const workflowName of workflowNames) {
             const workflow = config.workflows.get(workflowName);
             if (!workflow) {
@@ -278,87 +307,170 @@ export async function runEngine(opts: EngineOptions): Promise<CheckpointResult[]
             }
 
             let resolvedSteps: Step[];
+            let includeError = false;
             try {
                 resolvedSteps = resolveIncludes(workflow.steps, config.includes);
-                // Variables are interpolated per-step at execution time (for TOTP freshness)
             } catch (err: unknown) {
                 const message = err instanceof Error ? err.message : String(err);
                 console.error(`Error resolving includes for workflow "${workflowName}": ${message}`);
-                // Record error for all viewports
                 for (const [vpName] of viewportEntries) {
-                    results.push({
-                        workflow: workflowName,
-                        checkpoint: '*',
-                        viewport: vpName,
-                        status: 'error',
-                        diffPercent: null,
-                        diffPixels: null,
-                        totalPixels: null,
-                        dimensionMismatch: false,
-                        baselinePath: null,
-                        actualPath: null,
-                        diffPath: null,
-                        error: message,
-                    });
+                    results.push(makeErrorResult(workflowName, vpName, message));
                 }
-                continue;
+                includeError = true;
+                resolvedSteps = [];
             }
 
-            for (const [vpName, vpSize] of viewportEntries) {
-                workQueue.push({ workflowName, vpName, vpSize, resolvedSteps });
+            // Filter dependencies to only workflows in the current run set
+            const deps = new Set<string>();
+            if (workflow.depends_on) {
+                for (const dep of workflow.depends_on) {
+                    if (runSet.has(dep)) {
+                        deps.add(dep);
+                    }
+                }
+            }
+
+            const tasks: WorkTask[] = [];
+            if (!includeError) {
+                for (const [vpName, vpSize] of viewportEntries) {
+                    tasks.push({ workflowName, vpName, vpSize, resolvedSteps });
+                }
+            }
+
+            states.set(workflowName, {
+                workflowName,
+                dependencies: deps,
+                tasks,
+                completedCount: 0,
+                hasError: includeError,
+                released: includeError,
+            });
+        }
+
+        let totalTasks = Array.from(states.values()).reduce((sum, s) => sum + s.tasks.length, 0);
+
+        // --- Phase 2: Dependency-aware scheduler ---
+        const readyQueue: WorkTask[] = [];
+        const active = new Set<Promise<void>>();
+        const completedWorkflows = new Set<string>();
+        let taskIndex = 0;
+
+        // Mark include-errored workflows as completed so dependents can evaluate
+        for (const [name, state] of states) {
+            if (state.hasError && state.tasks.length === 0) {
+                completedWorkflows.add(name);
             }
         }
 
-        const totalTasks = workQueue.length;
+        /** Release workflows whose dependencies are all completed into the ready queue */
+        function releaseEligible(): void {
+            let released = true;
+            // Loop until no more workflows are released (handles cascading skips)
+            while (released) {
+                released = false;
+                for (const [name, state] of states) {
+                    if (state.released) continue;
 
-        // Run tasks with concurrency pool
-        const active = new Set<Promise<void>>();
-        let taskIndex = 0;
+                    // Check all dependencies are completed
+                    let allDepsCompleted = true;
+                    for (const dep of state.dependencies) {
+                        if (!completedWorkflows.has(dep)) {
+                            allDepsCompleted = false;
+                            break;
+                        }
+                    }
+                    if (!allDepsCompleted) continue;
 
-        for (const task of workQueue) {
-            taskIndex++;
-            const idx = taskIndex; // capture for closure
-            const promise = runSinglePair(browser, task, opts, idx, totalTasks, parallel)
-                .then((pairResults) => {
-                    results.push(...pairResults);
-                })
-                .catch((err: unknown) => {
-                    const message = err instanceof Error ? err.message : String(err);
-                    console.error(`Fatal error in ${task.workflowName} [${task.vpName}]: ${message}`);
-                    results.push({
-                        workflow: task.workflowName,
-                        checkpoint: '*',
-                        viewport: task.vpName,
-                        status: 'error',
-                        diffPercent: null,
-                        diffPixels: null,
-                        totalPixels: null,
-                        dimensionMismatch: false,
-                        baselinePath: null,
-                        actualPath: null,
-                        diffPath: null,
-                        error: message,
+                    // Check if any dependency failed — skip this workflow
+                    let failedDep: string | null = null;
+                    for (const dep of state.dependencies) {
+                        const depState = states.get(dep);
+                        if (depState?.hasError) {
+                            failedDep = dep;
+                            break;
+                        }
+                    }
+
+                    if (failedDep) {
+                        state.released = true;
+                        state.hasError = true;
+                        totalTasks -= state.tasks.length;
+                        state.completedCount = state.tasks.length;
+                        for (const task of state.tasks) {
+                            results.push(
+                                makeErrorResult(
+                                    task.workflowName,
+                                    task.vpName,
+                                    `Skipped: dependency "${failedDep}" failed`,
+                                ),
+                            );
+                        }
+                        completedWorkflows.add(name);
+                        released = true; // cascade — re-scan for newly eligible
+                    } else {
+                        state.released = true;
+                        readyQueue.push(...state.tasks);
+                        released = true;
+                    }
+                }
+            }
+        }
+
+        releaseEligible();
+
+        while (readyQueue.length > 0 || active.size > 0) {
+            // Dispatch from readyQueue up to concurrency limit
+            while (readyQueue.length > 0 && active.size < concurrency) {
+                // biome-ignore lint/style/noNonNullAssertion: guarded by while condition
+                const task = readyQueue.shift()!;
+                taskIndex++;
+                const idx = taskIndex;
+
+                const promise = runSinglePair(browser, task, opts, idx, totalTasks, parallel)
+                    .then((pairResults) => {
+                        results.push(...pairResults);
+                        const hadError = pairResults.some((r) => r.status === 'error');
+                        // biome-ignore lint/style/noNonNullAssertion: task always has a corresponding state
+                        const state = states.get(task.workflowName)!;
+                        state.completedCount++;
+                        if (hadError) state.hasError = true;
+
+                        if (state.completedCount === state.tasks.length) {
+                            completedWorkflows.add(task.workflowName);
+                            releaseEligible();
+                        }
+                    })
+                    .catch((err: unknown) => {
+                        const message = err instanceof Error ? err.message : String(err);
+                        console.error(`Fatal error in ${task.workflowName} [${task.vpName}]: ${message}`);
+                        results.push(makeErrorResult(task.workflowName, task.vpName, message));
+
+                        // biome-ignore lint/style/noNonNullAssertion: task always has a corresponding state
+                        const state = states.get(task.workflowName)!;
+                        state.completedCount++;
+                        state.hasError = true;
+
+                        if (state.completedCount === state.tasks.length) {
+                            completedWorkflows.add(task.workflowName);
+                            releaseEligible();
+                        }
+                    })
+                    .finally(() => {
+                        active.delete(promise);
                     });
-                })
-                .finally(() => {
-                    active.delete(promise);
-                });
-            active.add(promise);
+                active.add(promise);
+            }
 
-            if (active.size >= concurrency) {
+            if (active.size > 0) {
                 await Promise.race(active);
             }
         }
-
-        // Drain remaining tasks
-        await Promise.all(active);
 
         // Run teardown steps (cleanup after all workflows complete)
         if (config.config.teardown && config.config.teardown.length > 0) {
             console.log('\n  Teardown: running cleanup steps...');
             try {
                 const teardownSteps = resolveIncludes(config.config.teardown, config.includes);
-                // Variables are interpolated per-step at execution time (for TOTP freshness)
 
                 const defaultVp = config.config.defaults.viewport;
                 const context = await createContext(browser, defaultVp);

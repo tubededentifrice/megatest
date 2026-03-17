@@ -101,6 +101,7 @@ export function loadConfig(repoPath: string): LoadedConfig {
         workflows.set(raw.name, {
             name: raw.name,
             description: raw.description,
+            depends_on: Array.isArray(raw.depends_on) ? raw.depends_on : undefined,
             steps: raw.steps ?? [],
         });
     }

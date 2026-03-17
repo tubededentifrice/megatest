@@ -78,6 +78,23 @@ export async function runRun(opts: RunOptions): Promise<number> {
     console.log(`Viewports: ${Object.keys(config.config.viewports).join(', ')}`);
     console.log(`Base URL: ${url}`);
     console.log(`Concurrency: ${concurrency}`);
+
+    // Print dependency info if any workflows have depends_on
+    const runSet = new Set(workflowNames);
+    const depLines: string[] = [];
+    for (const name of workflowNames) {
+        const wf = config.workflows.get(name);
+        if (wf?.depends_on) {
+            const activeDeps = wf.depends_on.filter((d) => runSet.has(d));
+            if (activeDeps.length > 0) {
+                depLines.push(`${activeDeps.join(', ')} \u2192 ${name}`);
+            }
+        }
+    }
+    if (depLines.length > 0) {
+        console.log(`Dependencies: ${depLines.join(', ')}`);
+    }
+
     console.log('');
 
     // 5. Create image codec
