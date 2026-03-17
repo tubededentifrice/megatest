@@ -318,7 +318,7 @@ This section is referenced by both Bootstrap and Incremental modes. At the end o
 
 ### How to update
 
-1. Read the existing `<repo_path>/.megatest/INSTRUCTIONS.md`
+1. Read the existing `<repo_path>/.megatest/INSTRUCTIONS.md`. If it doesn't exist (e.g., repo was bootstrapped before this feature), create it first using the starter template from Bootstrap Step 1.
 2. Determine what new knowledge was gained this session
 3. Add or modify entries under clear section headings. Good section names:
    - `## Authentication` — login flows, TOTP, session handling
