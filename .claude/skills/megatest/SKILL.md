@@ -204,12 +204,21 @@ steps:
   - wait: 1000
 ```
 
-Then reference it in workflows that need auth:
+Create `includes/logout.yml` for session teardown:
+```yaml
+name: logout
+steps:
+  - open: /logout
+  - wait: 500
+```
+
+Then reference them in workflows that need auth — **every authenticated workflow MUST end with a logout/session-teardown include** (see [Session Teardown](#session-teardown)):
 ```yaml
 steps:
   - include: login
   - open: /dashboard
   - screenshot: dashboard-main
+  - include: logout
 ```
 
 ### Step 6: Create default plan
@@ -251,6 +260,35 @@ node ~/git/megatest/cli/bin/megatest.js validate --repo <repo_path>
 ```
 
 Fix any errors reported by the validator before finishing.
+
+### Step 10: Run and Verify
+
+**MANDATORY.** Run all generated workflows to confirm they execute successfully:
+
+```bash
+node ~/git/megatest/cli/bin/megatest.js run --repo <repo_path> --url <base_url>
+```
+
+**If the run reports errors:**
+1. Read the error output carefully — identify which workflow/step failed and why
+2. Browse the live site with Playwright MCP to understand the current state (take a snapshot)
+3. Fix the workflow YAML — common issues:
+   - Locator changed or was wrong (re-derive from `browser_snapshot`)
+   - Page requires more wait time before interaction
+   - Element not visible/clickable (needs scroll or wait)
+   - Auth session expired (check logout/login flow)
+   - Redirect changed the URL
+4. Re-run validate, then re-run the workflows
+5. **Repeat until all workflows pass with zero errors**
+
+Do NOT finish the skill until all workflows execute successfully. If a workflow cannot be fixed after 3 attempts, note the issue in `INSTRUCTIONS.md` and ask the user for guidance.
+
+### Step 11: Accept Baselines
+
+After a successful run with zero errors, accept the screenshots as baselines:
+```bash
+node ~/git/megatest/cli/bin/megatest.js accept --repo <repo_path>
+```
 
 ## Incremental Mode
 
@@ -300,6 +338,30 @@ Evaluate whether to update `INSTRUCTIONS.md`. See [Updating Custom Instructions]
 node ~/git/megatest/cli/bin/megatest.js validate --repo <repo_path>
 ```
 
+### Step 9: Run and Verify
+
+**MANDATORY.** Run all workflows (or at minimum the new/modified ones) to confirm they execute successfully:
+
+```bash
+node ~/git/megatest/cli/bin/megatest.js run --repo <repo_path> --url <base_url>
+```
+
+**If the run reports errors:**
+1. Read the error output carefully — identify which workflow/step failed and why
+2. Browse the live site with Playwright MCP to understand the current state (take a snapshot)
+3. Fix the workflow YAML — re-derive locators from `browser_snapshot` if needed
+4. Re-run validate, then re-run the workflows
+5. **Repeat until all workflows pass with zero errors**
+
+Do NOT finish the skill until all workflows execute successfully. If a workflow cannot be fixed after 3 attempts, note the issue in `INSTRUCTIONS.md` and ask the user for guidance.
+
+### Step 10: Accept Baselines
+
+After a successful run with zero errors, accept the new/updated screenshots as baselines:
+```bash
+node ~/git/megatest/cli/bin/megatest.js accept --repo <repo_path>
+```
+
 ## Important Rules
 
 1. **Never guess locators.** Always use `browser_snapshot` to get the real accessibility tree and derive locators from it.
@@ -311,6 +373,44 @@ node ~/git/megatest/cli/bin/megatest.js validate --repo <repo_path>
 7. **Run validate** after every config change.
 8. **Filenames must match name fields** — `homepage.yml` must contain `name: homepage`.
 9. **Use `depends_on`** when workflows have ordering requirements — e.g., authenticated flows should depend on the login workflow, flows that need setup data should depend on the setup workflow. Don't use `include: login` in every workflow when a dependency on a login workflow achieves the same result more efficiently.
+10. **Always add session teardown.** Every workflow that logs in or creates a session MUST include a logout/session-clearing step at the end. See [Session Teardown](#session-teardown).
+11. **Always run and verify.** After creating or modifying workflows, run them with the CLI and fix any issues before finishing. See the Run and Verify steps in Bootstrap/Incremental modes.
+
+## Session Teardown
+
+**Every authenticated workflow must end with a logout or session-clearing step.** This is mandatory to prevent session state inconsistencies between test runs. Even though the engine uses isolated browser contexts per workflow, server-side sessions may accumulate or cause issues (e.g., max concurrent sessions, session locks, stale state).
+
+**How to implement:**
+
+1. Create a reusable `includes/logout.yml` that performs logout. Browse the site to find the actual logout mechanism — it might be:
+   - A logout link/button in a user menu
+   - A `/logout` or `/auth/logout` endpoint
+   - A "Sign out" button in a dropdown
+   - An API call via `eval` step
+
+2. Get the exact logout locators from `browser_snapshot` — **never guess**.
+
+3. Add `- include: logout` as the **last step** of every workflow that includes a login step or accesses authenticated pages.
+
+**Example:**
+```yaml
+name: dashboard
+steps:
+  - include: login
+  - open: /dashboard
+  - wait: 1000
+  - screenshot: dashboard-main
+  - scroll: { down: 500 }
+  - screenshot: dashboard-bottom
+  - include: logout
+```
+
+If no explicit logout mechanism exists, use an `eval` step to clear cookies:
+```yaml
+name: logout
+steps:
+  - eval: "document.cookie.split(';').forEach(c => document.cookie = c.trim().split('=')[0] + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/')"
+```
 
 ## Variable Interpolation
 

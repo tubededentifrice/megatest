@@ -9,6 +9,7 @@ export async function createContext(browser: Browser, viewport: Viewport): Promi
     return browser.newContext({
         viewport: { width: viewport.width, height: viewport.height },
         reducedMotion: 'reduce',
+        serviceWorkers: 'block',
     });
 }
 
