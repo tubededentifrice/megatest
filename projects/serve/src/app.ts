@@ -11,7 +11,8 @@ import { renderDashboard } from './views/dashboard.js';
 import { renderReviewPage } from './views/review.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const staticDir = path.resolve(__dirname, '..', 'static');
+const staticDistDir = path.resolve(__dirname, '..', 'static', 'dist');
+const staticSrcDir = path.resolve(__dirname, '..', 'static', 'src');
 
 export function createApp(config: ServeConfig): Hono {
     const app = new Hono();
@@ -27,12 +28,27 @@ export function createApp(config: ServeConfig): Hono {
     // --- Static assets from /static/ ---
     app.get('/static/*', async (c) => {
         const rel = c.req.path.replace(/^\/static\//, '');
-        const filePath = path.resolve(staticDir, rel);
-        if (!filePath.startsWith(staticDir + path.sep)) return c.text('Forbidden', 403);
+
+        // Try dist/ first (hashed, production build)
+        const distPath = path.resolve(staticDistDir, rel);
+        if (distPath.startsWith(staticDistDir + path.sep)) {
+            try {
+                const content = await fs.promises.readFile(distPath);
+                c.header('Content-Type', getMimeType(distPath));
+                c.header('Cache-Control', 'public, max-age=31536000, immutable');
+                return c.body(content);
+            } catch {
+                // fall through to src/
+            }
+        }
+
+        // Fallback to src/ (unprocessed, dev convenience)
+        const srcPath = path.resolve(staticSrcDir, rel);
+        if (!srcPath.startsWith(staticSrcDir + path.sep)) return c.text('Forbidden', 403);
         try {
-            const content = await fs.promises.readFile(filePath);
-            c.header('Content-Type', getMimeType(filePath));
-            c.header('Cache-Control', 'public, max-age=86400');
+            const content = await fs.promises.readFile(srcPath);
+            c.header('Content-Type', getMimeType(srcPath));
+            c.header('Cache-Control', 'public, max-age=5');
             return c.body(content);
         } catch {
             return c.text('Not Found', 404);

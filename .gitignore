@@ -4,6 +4,7 @@ node_modules/
 # Build output
 dist/
 projects/*/dist/
+projects/serve/static/dist/
 *.tsbuildinfo
 
 # macOS

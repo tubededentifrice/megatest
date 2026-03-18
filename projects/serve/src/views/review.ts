@@ -1,4 +1,5 @@
 import type { ReportMeta, ReviewCheckpoint } from '@megatest/core';
+import { asset } from '../assets.js';
 import type { ReviewData } from '../types.js';
 import { escapeHtml, formatDuration, timeTag } from '../utils.js';
 
@@ -128,9 +129,9 @@ export function renderReviewPage(
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Review &mdash; ${escapeHtml(projectName)} &mdash; ${escapeHtml(commitHash)}</title>
-  <link rel="stylesheet" href="/static/css/tokens.css">
-  <link rel="stylesheet" href="/static/css/review.css">
-  <script src="/static/js/htmx.min.js"></script>
+  <link rel="stylesheet" href="${asset('css/tokens.css')}">
+  <link rel="stylesheet" href="${asset('css/review.css')}">
+  <script src="${asset('js/htmx.min.js')}"></script>
 </head>
 <body>
   <div class="rv" data-default-tab="${defaultTab}">
@@ -193,7 +194,7 @@ export function renderReviewPage(
 
   ${errors.length > 0 ? `<!-- ${errors.length} error checkpoint(s) omitted from review -->` : ''}
 
-  <script src="/static/js/review.js"></script>
+  <script src="${asset('js/review.js')}"></script>
 </body>
 </html>`;
 }

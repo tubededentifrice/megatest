@@ -1,4 +1,5 @@
 import type { ReportMeta } from '@megatest/core';
+import { asset } from '../assets.js';
 import { listReports } from '../discovery.js';
 import type { DiscoveredProject, ReportEntry } from '../types.js';
 import { escapeHtml, formatDuration, timeTag } from '../utils.js';
@@ -110,8 +111,8 @@ export function renderDashboard(title: string, projects: DiscoveredProject[]): s
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(title)}</title>
-  <link rel="stylesheet" href="/static/css/tokens.css">
-  <link rel="stylesheet" href="/static/css/dashboard.css">
+  <link rel="stylesheet" href="${asset('css/tokens.css')}">
+  <link rel="stylesheet" href="${asset('css/dashboard.css')}">
 </head>
 <body>
   <div class="app">
@@ -130,7 +131,7 @@ export function renderDashboard(title: string, projects: DiscoveredProject[]): s
       </div>
     </div>
   </div>
-  <script src="/static/js/dashboard.js"></script>
+  <script src="${asset('js/dashboard.js')}"></script>
 </body>
 </html>`;
 }
