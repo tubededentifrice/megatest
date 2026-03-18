@@ -9,8 +9,8 @@ cd "$repo_root"
 # ============================================================================
 
 # Skip if biome is not installed
-if [[ ! -d "cli/node_modules/@biomejs" ]]; then
-  echo "pre-commit: biome not installed, skipping (run: cd cli && npm install)" >&2
+if [[ ! -d "node_modules/@biomejs" ]]; then
+  echo "pre-commit: biome not installed, skipping (run: npm install)" >&2
   exit 0
 fi
 
@@ -22,10 +22,10 @@ if [ -z "$STAGED_TS" ]; then
 fi
 
 echo "pre-commit: formatting staged TypeScript files..."
-echo "$STAGED_TS" | xargs npx --prefix cli biome format --write >/dev/null 2>&1
+echo "$STAGED_TS" | xargs npx biome format --write >/dev/null 2>&1
 
 # Re-stage formatted files
 echo "$STAGED_TS" | xargs git add
 
 echo "pre-commit: linting staged TypeScript files..."
-echo "$STAGED_TS" | xargs npx --prefix cli biome lint || exit 1
+echo "$STAGED_TS" | xargs npx biome lint || exit 1

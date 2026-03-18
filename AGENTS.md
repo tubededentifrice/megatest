@@ -12,10 +12,11 @@
 
 ## Project Overview
 
-Megatest is a local-first visual regression testing CLI written in TypeScript. It runs Playwright workflows, captures screenshots, diffs them with pixelmatch, and generates standalone HTML reports.
+Megatest is a local-first visual regression testing tool written in TypeScript, organized as a monorepo with three packages:
 
-The project has two parts:
-- **CLI tool** (`cli/`): The core product — validate, run, and accept visual regression tests
+- **`@megatest/core`** (`projects/core/`): Shared types and image codec used across packages
+- **`@megatest/cli`** (`projects/cli/`): CLI tool — validate, run, and accept visual regression tests
+- **`@megatest/serve`** (`projects/serve/`): Standalone web dashboard for browsing reports and accepting changes
 - **Megatest skill** (`.claude/skills/megatest/`): A Claude Code skill that auto-generates `.megatest/` configs by browsing live sites
 
 ### Tech Stack
@@ -24,7 +25,8 @@ The project has two parts:
 |-----------|------------|
 | Language | TypeScript (ES2022, strict mode) |
 | Runtime | Node.js |
-| Build | tsc (TypeScript compiler) |
+| Build | tsc (TypeScript compiler, project references) |
+| Monorepo | npm workspaces |
 | CLI Framework | Commander 12.x |
 | Browser Automation | Playwright 1.48.x |
 | Image Diffing | pixelmatch 6.x, pngjs 7.x |
@@ -33,24 +35,39 @@ The project has two parts:
 ### Key Directories
 
 ```
-cli/                # Main CLI implementation
-  src/
-    commands/       # CLI commands (run, validate, accept)
-    config/         # Config loading, validation, schema, variables
-    runner/         # Playwright engine, step execution, locators
-    differ/         # Screenshot comparison pipeline
-    reporter/       # HTML and console report generation
-    types/          # TypeScript type definitions
-    cli.ts          # Commander entry point
-    types.ts        # Core type definitions
-    utils.ts        # Git and filesystem utilities
-  bin/
-    megatest.js     # Executable entry point
-  dist/             # Compiled output (gitignored)
-spec/               # Design specifications (historical reference)
-mocks/              # UI mockups (Docker/nginx)
+projects/
+  core/               # @megatest/core — shared types + image codec
+    src/
+      types.ts        # CheckpointResult, ReportMeta, ReviewCheckpoint, etc.
+      codec/          # PNG and WebP image encode/decode
+      index.ts        # Barrel re-exports
+  cli/                # @megatest/cli — CLI tool
+    src/
+      commands/       # CLI commands (run, validate, accept)
+      config/         # Config loading, validation, schema, variables
+      runner/         # Playwright engine, step execution, locators
+      differ/         # Screenshot comparison pipeline
+      reporter/       # HTML and console report generation
+      cli.ts          # Commander entry point
+      utils.ts        # Git and filesystem utilities
+    bin/
+      megatest.js     # Executable entry point
+  serve/              # @megatest/serve — web dashboard
+    src/
+      config.ts       # Serve config loading
+      discovery.ts    # Project/report discovery
+      router.ts       # HTTP request routing
+      handlers.ts     # Accept/accept-all POST handlers
+      utils.ts        # HTTP and rendering utilities
+      types.ts        # Serve-local types
+      views/          # HTML rendering (dashboard, review, styles)
+      index.ts        # Entry point (runServe)
+    bin/
+      megatest-serve.js  # Standalone entry point
+spec/                 # Design specifications (historical reference)
+mocks/                # UI mockups (Docker/nginx)
 .claude/
-  skills/megatest/  # Config generation skill
+  skills/megatest/    # Config generation skill
 ```
 
 ## Development
@@ -58,28 +75,32 @@ mocks/              # UI mockups (Docker/nginx)
 ### Build & Run
 
 ```bash
-cd cli && npm run build          # Compile TypeScript
-cd cli && npm run dev            # Watch mode
+npm install                      # Install all workspace dependencies
+npm run build                    # Build all packages (core → cli → serve)
+npm run build -w @megatest/cli   # Build a single package
 
 # Run the CLI
-node cli/bin/megatest.js validate --repo <path>
-node cli/bin/megatest.js run --repo <path> --url <url>
-node cli/bin/megatest.js accept --repo <path>
+node projects/cli/bin/megatest.js validate --repo <path>
+node projects/cli/bin/megatest.js run --repo <path> --url <url>
+node projects/cli/bin/megatest.js accept --repo <path>
+
+# Run the serve dashboard standalone
+node projects/serve/bin/megatest-serve.js --config serve.config.yml
 ```
 
 ### Prerequisites
 
 ```bash
-cd cli && npm install
+npm install
 npx playwright install chromium
 ```
 
-### Serve Command (Docker)
+### Serve (Docker)
 
-The `serve` command runs in a Docker container via Traefik. After code changes, rebuild and restart with:
+The serve dashboard runs in a Docker container via Traefik. After code changes, rebuild and restart with:
 
 ```bash
-cd cli && npm run build
+npm run build
 docker compose up --build -d
 ```
 
@@ -115,8 +136,8 @@ The `spec/` directory contains **design documents written before and during deve
 Before committing:
 
 ```bash
-cd cli && npm run build          # Must compile cleanly (strict mode)
-cd cli && npm run check          # Biome lint + format check (warnings OK, errors fail)
+npm run build          # Must compile cleanly (strict mode)
+npm run check          # Biome lint + format check (warnings OK, errors fail)
 ```
 
 No test framework is set up yet — rely on manual testing with the CLI commands and TypeScript compiler strictness.
@@ -126,12 +147,21 @@ A pre-commit hook auto-formats staged `.ts` files and runs the linter. Install w
 ## Code Style
 
 - Strict TypeScript — no `any` types without justification
-- Type definitions in `types/` or `types.ts`
+- Shared types in `projects/core/src/types.ts`
+- CLI-specific config types in `projects/cli/src/config/schema.ts`
 - Keep functions small and focused
 - Use descriptive names for checkpoint and workflow identifiers
 - Follow existing patterns in the codebase
 
 ## Architecture Notes
+
+### Package Dependencies
+
+```
+@megatest/core    ← no internal deps (shared types + codec)
+@megatest/cli     ← depends on @megatest/core
+@megatest/serve   ← depends on @megatest/core (independent from CLI)
+```
 
 ### Config Format (`.megatest/` directory in target repos)
 
@@ -177,11 +207,12 @@ Standalone HTML files with embedded images (base64), GitHub-style dark theme, fi
 ## Common Pitfalls
 
 1. **Always rebuild after TypeScript changes**: `npm run build` — the CLI runs from `dist/`, not `src/`
-2. **Playwright needs Chromium**: Run `npx playwright install chromium` if missing
-3. **Config filenames must match name fields**: `homepage.yml` must contain `name: homepage`
-4. **Variable interpolation**: `${VAR}` from config, `${env:VAR}` from environment
-5. **Circular includes**: The validator detects these via DFS — don't create circular `include` references
-6. **Exit codes matter**: `run` returns 0 (all pass) or 1 (failures/new/errors) for CI integration
+2. **Build order matters**: core must build before cli or serve (`npm run build` handles this)
+3. **Playwright needs Chromium**: Run `npx playwright install chromium` if missing
+4. **Config filenames must match name fields**: `homepage.yml` must contain `name: homepage`
+5. **Variable interpolation**: `${VAR}` from config, `${env:VAR}` from environment
+6. **Circular includes**: The validator detects these via DFS — don't create circular `include` references
+7. **Exit codes matter**: `run` returns 0 (all pass) or 1 (failures/new/errors) for CI integration
 
 ## Plan Mode (MANDATORY)
 

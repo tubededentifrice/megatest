@@ -35,9 +35,9 @@ Your prompt contains:
 1. Read `spec/` files relevant to the feature
 2. Read existing code in the module
 3. **Search for existing patterns you can reuse:**
-   - Type definitions: check `cli/src/types.ts` and `cli/src/types/`
-   - Utilities: check `cli/src/utils.ts`
-   - Config schema: check `cli/src/config/schema.ts`
+   - Type definitions: check `projects/core/src/types.ts` and `projects/cli/src/types/`
+   - Utilities: check `projects/cli/src/utils.ts`
+   - Config schema: check `projects/cli/src/config/schema.ts`
 
 **If something similar exists, use it. Don't duplicate.**
 
@@ -62,7 +62,7 @@ Ask yourself:
 ### 5. Build and Verify
 
 ```bash
-cd cli && npm run build
+npm run build
 ```
 
 **Must compile cleanly with strict mode.** Fix all type errors before reporting done.
@@ -73,13 +73,13 @@ Test your changes with the actual CLI:
 
 ```bash
 # Validate config
-node cli/bin/megatest.js validate --repo <test-repo>
+node projects/cli/bin/megatest.js validate --repo <test-repo>
 
 # Run tests
-node cli/bin/megatest.js run --repo <test-repo> --url <test-url>
+node projects/cli/bin/megatest.js run --repo <test-repo> --url <test-url>
 
 # Accept baselines
-node cli/bin/megatest.js accept --repo <test-repo>
+node projects/cli/bin/megatest.js accept --repo <test-repo>
 ```
 
 ### 7. Self-Review
@@ -102,7 +102,7 @@ After completing implementation, run `/selfreview` to catch bugs, missing pieces
 Completed: <summary>
 
 Changes:
-- cli/src/<module>/<file>: <what changed>
+- projects/<package>/src/<module>/<file>: <what changed>
 
 Build: Passing
 Manual Test: <what was tested and result>

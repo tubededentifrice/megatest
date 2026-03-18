@@ -1,0 +1,8 @@
+{
+  "files": [],
+  "references": [
+    { "path": "projects/core" },
+    { "path": "projects/cli" },
+    { "path": "projects/serve" }
+  ]
+}

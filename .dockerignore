@@ -1,0 +1,15 @@
+node_modules
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+.git
+.githooks
+.megatest
+.playwright-mcp
+.claude
+mocks
+spec
+docs
+test-fixtures
+scripts
+*.md

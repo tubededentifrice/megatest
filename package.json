@@ -1,0 +1,17 @@
+{
+  "private": true,
+  "workspaces": [
+    "projects/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @megatest/core && npm run build -w @megatest/cli && npm run build -w @megatest/serve",
+    "check": "biome check projects/*/src",
+    "check:fix": "biome check --write projects/*/src",
+    "format": "biome format --write projects/*/src",
+    "lint": "biome lint projects/*/src"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.0",
+    "typescript": "^5.4.0"
+  }
+}

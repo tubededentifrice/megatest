@@ -38,7 +38,7 @@ Restate what you're being asked to decide or research:
 Read relevant local files:
 - Root `CLAUDE.md`
 - `spec/` for design intent
-- Relevant source files in `cli/src/`
+- Relevant source files in `projects/*/src/`
 
 Use web search when needed:
 - Playwright API details and best practices

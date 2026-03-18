@@ -49,7 +49,7 @@ Review code changes made by the Coder:
 ### Build Verification
 
 ```bash
-cd cli && npm run build
+npm run build
 ```
 
 Must compile cleanly — no errors, no warnings.

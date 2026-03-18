@@ -190,7 +190,7 @@ If user wants details, walk through findings one at a time with context.
 
 Exit plan mode and apply the agreed-upon fixes. After fixing:
 
-1. Build: `cd cli && npm run build`
+1. Build: `npm run build`
 2. If build passes, present the fixes for the user to review
 
 ## Tips

@@ -19,8 +19,8 @@ set -euo pipefail
 # =============================================================================
 
 # Paths to lint/format (relative to repo root)
-LINT_PATHS="${LINT_PATHS:-cli/src}"
-FORMAT_PATHS="${FORMAT_PATHS:-cli/src}"
+LINT_PATHS="${LINT_PATHS:-projects/core/src projects/cli/src projects/serve/src}"
+FORMAT_PATHS="${FORMAT_PATHS:-projects/core/src projects/cli/src projects/serve/src}"
 
 # =============================================================================
 # Helper Functions
@@ -50,9 +50,9 @@ get_repo_root() {
 ensure_deps() {
     local repo_root
     repo_root=$(get_repo_root)
-    if [[ ! -d "$repo_root/cli/node_modules/@biomejs" ]]; then
+    if [[ ! -d "$repo_root/node_modules/@biomejs" ]]; then
         echo "Biome not found, running npm install..."
-        (cd "$repo_root/cli" && npm install)
+        (cd "$repo_root" && npm install)
     fi
 }
 
@@ -61,7 +61,7 @@ biome_run() {
     local repo_root
     repo_root=$(get_repo_root)
     ensure_deps
-    npx --prefix "$repo_root/cli" biome "$@"
+    npx --prefix "$repo_root" biome "$@"
 }
 
 # =============================================================================

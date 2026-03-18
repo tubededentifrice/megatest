@@ -256,7 +256,7 @@ Evaluate whether to update `INSTRUCTIONS.md`. See [Updating Custom Instructions]
 
 Run the validator to confirm syntax:
 ```bash
-node ~/git/megatest/cli/bin/megatest.js validate --repo <repo_path>
+node ~/git/megatest/projects/cli/bin/megatest.js validate --repo <repo_path>
 ```
 
 Fix any errors reported by the validator before finishing.
@@ -266,7 +266,7 @@ Fix any errors reported by the validator before finishing.
 **MANDATORY.** Run all generated workflows to confirm they execute successfully:
 
 ```bash
-node ~/git/megatest/cli/bin/megatest.js run --repo <repo_path> --url <base_url>
+node ~/git/megatest/projects/cli/bin/megatest.js run --repo <repo_path> --url <base_url>
 ```
 
 **If the run reports errors:**
@@ -287,7 +287,7 @@ Do NOT finish the skill until all workflows execute successfully. If a workflow 
 
 After a successful run with zero errors, accept the screenshots as baselines:
 ```bash
-node ~/git/megatest/cli/bin/megatest.js accept --repo <repo_path>
+node ~/git/megatest/projects/cli/bin/megatest.js accept --repo <repo_path>
 ```
 
 ## Incremental Mode
@@ -335,7 +335,7 @@ Evaluate whether to update `INSTRUCTIONS.md`. See [Updating Custom Instructions]
 ### Step 8: Validate
 
 ```bash
-node ~/git/megatest/cli/bin/megatest.js validate --repo <repo_path>
+node ~/git/megatest/projects/cli/bin/megatest.js validate --repo <repo_path>
 ```
 
 ### Step 9: Run and Verify
@@ -343,7 +343,7 @@ node ~/git/megatest/cli/bin/megatest.js validate --repo <repo_path>
 **MANDATORY.** Run all workflows (or at minimum the new/modified ones) to confirm they execute successfully:
 
 ```bash
-node ~/git/megatest/cli/bin/megatest.js run --repo <repo_path> --url <base_url>
+node ~/git/megatest/projects/cli/bin/megatest.js run --repo <repo_path> --url <base_url>
 ```
 
 **If the run reports errors:**
@@ -359,7 +359,7 @@ Do NOT finish the skill until all workflows execute successfully. If a workflow 
 
 After a successful run with zero errors, accept the new/updated screenshots as baselines:
 ```bash
-node ~/git/megatest/cli/bin/megatest.js accept --repo <repo_path>
+node ~/git/megatest/projects/cli/bin/megatest.js accept --repo <repo_path>
 ```
 
 ## Important Rules
@@ -492,9 +492,9 @@ When finished, print:
 1. Summary of what was created/updated
 2. How to run the tests:
    ```
-   node ~/git/megatest/cli/bin/megatest.js run --repo <repo_path> --url <base_url>
+   node ~/git/megatest/projects/cli/bin/megatest.js run --repo <repo_path> --url <base_url>
    ```
 3. How to accept baselines after first run:
    ```
-   node ~/git/megatest/cli/bin/megatest.js accept --repo <repo_path>
+   node ~/git/megatest/projects/cli/bin/megatest.js accept --repo <repo_path>
    ```

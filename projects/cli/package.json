@@ -1,0 +1,26 @@
+{
+  "name": "@megatest/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Visual regression testing CLI",
+  "main": "dist/cli.js",
+  "bin": {
+    "megatest": "./bin/megatest.js"
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@megatest/core": "*",
+    "commander": "^12.0.0",
+    "js-yaml": "^4.1.0",
+    "pixelmatch": "^6.0.0",
+    "playwright": "^1.48.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.4.0"
+  }
+}
