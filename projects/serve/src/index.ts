@@ -1,10 +1,16 @@
-import * as http from 'node:http';
 import * as path from 'node:path';
+import { serve } from '@hono/node-server';
+import { createApp } from './app.js';
 import { loadConfig } from './config.js';
 import { discoverProjects, listReports } from './discovery.js';
-import { createHandler } from './router.js';
 
-export type { ServeConfig, ServeProjectConfig, DiscoveredProject, ReportEntry, ReviewData } from './types.js';
+export type {
+    ServeConfig,
+    ServeProjectConfig,
+    DiscoveredProject,
+    ReportEntry,
+    ReviewData,
+} from './types.js';
 
 export interface ServeOptions {
     config: string;
@@ -39,10 +45,12 @@ export async function runServe(opts: ServeOptions): Promise<void> {
         }
     }
 
-    const handler = createHandler(config);
-    const server = http.createServer(handler);
-
+    const app = createApp(config);
     const { port, host } = config.server;
+
+    const server = serve({ fetch: app.fetch, port, hostname: host }, (info) => {
+        console.log(`\nMegatest report server running at http://${host}:${info.port}/`);
+    });
 
     server.on('error', (err: NodeJS.ErrnoException) => {
         if (err.code === 'EADDRINUSE') {
@@ -51,9 +59,5 @@ export async function runServe(opts: ServeOptions): Promise<void> {
             console.error(`Server error: ${err.message}`);
         }
         process.exit(1);
-    });
-
-    server.listen(port, host, () => {
-        console.log(`\nMegatest report server running at http://${host}:${port}/`);
     });
 }

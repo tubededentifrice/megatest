@@ -2,7 +2,6 @@ import type { ReportMeta } from '@megatest/core';
 import { listReports } from '../discovery.js';
 import type { DiscoveredProject, ReportEntry } from '../types.js';
 import { escapeHtml, formatDuration, timeTag } from '../utils.js';
-import { DASHBOARD_CSS } from './styles.js';
 
 export function renderBadges(meta: ReportMeta): string {
     const parts: string[] = [];
@@ -111,9 +110,8 @@ export function renderDashboard(title: string, projects: DiscoveredProject[]): s
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(title)}</title>
-  <style>
-${DASHBOARD_CSS}
-  </style>
+  <link rel="stylesheet" href="/static/css/tokens.css">
+  <link rel="stylesheet" href="/static/css/dashboard.css">
 </head>
 <body>
   <div class="app">
@@ -132,15 +130,7 @@ ${DASHBOARD_CSS}
       </div>
     </div>
   </div>
-  <script>
-    document.querySelectorAll('time[data-ts]').forEach(el => {
-      const d = new Date(el.dataset.ts);
-      if (!isNaN(d)) el.textContent = d.toLocaleString(undefined, {
-        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false
-      });
-      else el.textContent = el.dataset.ts;
-    });
-  </script>
+  <script src="/static/js/dashboard.js"></script>
 </body>
 </html>`;
 }

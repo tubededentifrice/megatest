@@ -1,9 +1,9 @@
 import * as fs from 'node:fs';
-import type * as http from 'node:http';
 import * as path from 'node:path';
+import type { Context } from 'hono';
 import { loadReviewData } from './discovery.js';
 import type { ServeProjectConfig } from './types.js';
-import { jsonReply, parseJsonBody } from './utils.js';
+import { escapeHtml } from './utils.js';
 
 export function resolveProjectDir(
     configMap: Map<string, ServeProjectConfig>,
@@ -16,20 +16,14 @@ export function resolveProjectDir(
 
 const SAFE_SLUG = /^[a-zA-Z0-9_-]+$/;
 
-export async function handleAccept(
-    req: http.IncomingMessage,
-    res: http.ServerResponse,
-    megatestDir: string,
-    commitHash: string,
-): Promise<void> {
+export async function handleAccept(c: Context, megatestDir: string, commitHash: string): Promise<Response> {
     try {
-        const body = await parseJsonBody(req);
+        const body = await c.req.json();
         const cp = body.checkpoint as string;
         const vp = body.viewport as string;
 
         if (!cp || !vp || !SAFE_SLUG.test(cp) || !SAFE_SLUG.test(vp)) {
-            jsonReply(res, 400, { ok: false, error: 'Invalid checkpoint or viewport' });
-            return;
+            return c.json({ ok: false, error: 'Invalid checkpoint or viewport' }, 400);
         }
 
         const commitDir = path.join(megatestDir, 'reports', commitHash);
@@ -41,17 +35,14 @@ export async function handleAccept(
 
         // Path traversal protection
         if (!src.startsWith(path.join(megatestDir, 'reports') + path.sep)) {
-            jsonReply(res, 403, { ok: false, error: 'Forbidden' });
-            return;
+            return c.json({ ok: false, error: 'Forbidden' }, 403);
         }
         if (!dest.startsWith(path.join(megatestDir, 'baselines') + path.sep)) {
-            jsonReply(res, 403, { ok: false, error: 'Forbidden' });
-            return;
+            return c.json({ ok: false, error: 'Forbidden' }, 403);
         }
 
         if (!fs.existsSync(src)) {
-            jsonReply(res, 404, { ok: false, error: 'Actual screenshot not found' });
-            return;
+            return c.json({ ok: false, error: 'Actual screenshot not found' }, 404);
         }
 
         fs.mkdirSync(path.dirname(dest), { recursive: true });
@@ -59,7 +50,7 @@ export async function handleAccept(
 
         // Update results.json so refreshes reflect the acceptance
         if (reviewData) {
-            const match = reviewData.checkpoints.find((c) => c.checkpoint === cp && c.viewport === vp);
+            const match = reviewData.checkpoints.find((ch) => ch.checkpoint === cp && ch.viewport === vp);
             if (match) {
                 match.status = 'pass';
                 const resultsPath = path.join(commitDir, 'results.json');
@@ -67,28 +58,36 @@ export async function handleAccept(
             }
         }
 
-        jsonReply(res, 200, { ok: true });
+        // htmx: return accepted thumbnail fragment
+        if (c.req.header('HX-Request')) {
+            const slug = `${cp}-${vp}`;
+            return c.html(
+                `<div class="rv-thumb accepted" data-cp="${escapeHtml(cp)}" data-vp="${escapeHtml(vp)}"
+             data-status="pass" data-slug="${escapeHtml(slug)}">
+          <div class="rv-thumb__wrap">
+            <img src="" alt="${escapeHtml(slug)}" class="rv-thumb__img" loading="lazy">
+          </div>
+          <div class="rv-thumb__label">
+            <span class="rv-thumb__name">${escapeHtml(cp)}</span>
+            <span class="rv-thumb__meta">${escapeHtml(vp)}</span>
+          </div>
+        </div>`,
+            );
+        }
+
+        return c.json({ ok: true });
     } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unknown error';
-        jsonReply(res, 400, { ok: false, error: msg });
+        return c.json({ ok: false, error: msg }, 400);
     }
 }
 
-export async function handleAcceptAll(
-    req: http.IncomingMessage,
-    res: http.ServerResponse,
-    megatestDir: string,
-    commitHash: string,
-): Promise<void> {
+export async function handleAcceptAll(c: Context, megatestDir: string, commitHash: string): Promise<Response> {
     try {
-        // Consume body even if empty
-        await parseJsonBody(req);
-
         const commitDir = path.join(megatestDir, 'reports', commitHash);
         const reviewData = loadReviewData(megatestDir, commitDir);
         if (!reviewData) {
-            jsonReply(res, 404, { ok: false, error: 'No review data found' });
-            return;
+            return c.json({ ok: false, error: 'No review data found' }, 404);
         }
 
         const ext = reviewData.extension;
@@ -114,9 +113,17 @@ export async function handleAcceptAll(
         const resultsPath = path.join(commitDir, 'results.json');
         fs.writeFileSync(resultsPath, JSON.stringify(reviewData, null, 2));
 
-        jsonReply(res, 200, { ok: true, accepted });
+        // htmx: return done button + trigger event to mark all thumbs
+        if (c.req.header('HX-Request')) {
+            c.header('HX-Trigger', JSON.stringify({ acceptedAll: { count: accepted } }));
+            return c.html(
+                `<button class="rv-accept-all rv-accept-all--done" disabled>All accepted (${accepted})</button>`,
+            );
+        }
+
+        return c.json({ ok: true, accepted });
     } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unknown error';
-        jsonReply(res, 400, { ok: false, error: msg });
+        return c.json({ ok: false, error: msg }, 400);
     }
 }

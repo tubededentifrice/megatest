@@ -1,0 +1,64 @@
+.app  { display: flex; min-height: 100vh; }
+.main { flex: 1; }
+.page { padding: var(--sp-xl); max-width: 960px; margin: 0 auto; }
+
+.topbar {
+  display: flex; align-items: center; gap: var(--sp-md);
+  padding: var(--sp-md) var(--sp-xl);
+  border-bottom: 1px solid var(--c-border);
+  background: var(--c-surface);
+  position: sticky; top: 0; z-index: 5;
+}
+.topbar__breadcrumb { display: flex; align-items: center; gap: var(--sp-xs); font-size: var(--fs-md); color: var(--c-muted); }
+.topbar__breadcrumb span { color: var(--c-text); font-weight: 600; }
+
+.card {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+.card__header {
+  display: flex; align-items: center; gap: var(--sp-md);
+  padding: var(--sp-md) var(--sp-lg);
+  border-bottom: 1px solid var(--c-border);
+}
+.card__header h2 { font-size: var(--fs-lg); font-weight: 600; }
+.card__body { padding: var(--sp-lg); }
+
+.latest-report {
+  display: block;
+  padding: var(--sp-md);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  color: var(--c-text);
+  transition: border-color .15s;
+}
+.latest-report:hover { border-color: var(--c-accent); text-decoration: none; }
+.latest-report__header {
+  display: flex; align-items: center; gap: var(--sp-md); flex-wrap: wrap;
+}
+.latest-report__badges {
+  display: flex; align-items: center; gap: var(--sp-sm); margin-top: var(--sp-sm); flex-wrap: wrap;
+}
+
+.older-reports { margin-top: var(--sp-md); }
+.older-reports__header {
+  padding: var(--sp-xs) 0;
+  text-transform: uppercase; letter-spacing: .04em;
+}
+.report-row {
+  display: flex; align-items: center; gap: var(--sp-md);
+  padding: var(--sp-sm) var(--sp-md);
+  border-bottom: 1px solid var(--c-border);
+  color: var(--c-text);
+  transition: background .15s;
+}
+.report-row:hover { background: rgba(255,255,255,.03); text-decoration: none; }
+.report-row__badges { margin-left: auto; display: flex; gap: var(--sp-xs); }
+
+.empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: var(--sp-2xl) var(--sp-lg);
+  text-align: center;
+}

@@ -1,4 +1,3 @@
-import type * as http from 'node:http';
 import * as path from 'node:path';
 
 // ---------------------------------------------------------------------------
@@ -41,33 +40,4 @@ export function formatDuration(ms: number): string {
 
 export function timeTag(dateStr: string): string {
     return `<time data-ts="${escapeHtml(dateStr)}"></time>`;
-}
-
-export function jsonReply(res: http.ServerResponse, status: number, data: Record<string, unknown>): void {
-    res.writeHead(status, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(data));
-}
-
-export function parseJsonBody(req: http.IncomingMessage, maxBytes = 10240): Promise<Record<string, unknown>> {
-    return new Promise((resolve, reject) => {
-        let body = '';
-        let size = 0;
-        req.on('data', (chunk: Buffer) => {
-            size += chunk.length;
-            if (size > maxBytes) {
-                reject(new Error('Body too large'));
-                req.destroy();
-                return;
-            }
-            body += chunk.toString();
-        });
-        req.on('end', () => {
-            try {
-                resolve(body.length > 0 ? (JSON.parse(body) as Record<string, unknown>) : {});
-            } catch {
-                reject(new Error('Invalid JSON'));
-            }
-        });
-        req.on('error', reject);
-    });
 }

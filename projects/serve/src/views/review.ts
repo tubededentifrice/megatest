@@ -1,7 +1,6 @@
 import type { ReportMeta, ReviewCheckpoint } from '@megatest/core';
 import type { ReviewData } from '../types.js';
 import { escapeHtml, formatDuration, timeTag } from '../utils.js';
-import { REVIEW_CSS } from './styles.js';
 
 export function renderReviewPage(
     projectName: string,
@@ -51,7 +50,11 @@ export function renderReviewPage(
               <div class="rv-zone rv-zone--baseline" data-img="${escapeHtml(baselineUrl)}">Baseline</div>
               <div class="rv-zone rv-zone--actual" data-img="${escapeHtml(actualUrl)}">Actual</div>
             </div>
-            <button class="rv-accept-btn" data-cp="${escapeHtml(cp.checkpoint)}" data-vp="${escapeHtml(cp.viewport)}">Accept</button>
+            <button class="rv-accept-btn"
+                    hx-post="${escapeHtml(reportBase)}/accept"
+                    hx-vals='${escapeHtml(JSON.stringify({ checkpoint: cp.checkpoint, viewport: cp.viewport }))}'
+                    hx-target="closest .rv-thumb"
+                    hx-swap="outerHTML">Accept</button>
           </div>
           <div class="rv-thumb__label">
             <span class="rv-thumb__name">${escapeHtml(cp.checkpoint)}</span>
@@ -69,7 +72,11 @@ export function renderReviewPage(
              data-status="new" data-default="${escapeHtml(actualUrl)}" data-slug="${escapeHtml(slug)}">
           <div class="rv-thumb__wrap">
             <img src="${escapeHtml(actualUrl)}" alt="${escapeHtml(slug)}" class="rv-thumb__img" loading="lazy">
-            <button class="rv-accept-btn" data-cp="${escapeHtml(cp.checkpoint)}" data-vp="${escapeHtml(cp.viewport)}">Accept</button>
+            <button class="rv-accept-btn"
+                    hx-post="${escapeHtml(reportBase)}/accept"
+                    hx-vals='${escapeHtml(JSON.stringify({ checkpoint: cp.checkpoint, viewport: cp.viewport }))}'
+                    hx-target="closest .rv-thumb"
+                    hx-swap="outerHTML">Accept</button>
           </div>
           <div class="rv-thumb__label">
             <span class="rv-thumb__name">${escapeHtml(cp.checkpoint)}</span>
@@ -101,7 +108,10 @@ export function renderReviewPage(
 
     const hasChanges = failed.length + newCps.length > 0;
     const acceptAllBtn = hasChanges
-        ? `<button class="rv-accept-all" id="accept-all-btn">Accept All Changes</button>`
+        ? `<button class="rv-accept-all" id="accept-all-btn"
+              hx-post="${escapeHtml(reportBase)}/accept-all"
+              hx-target="this"
+              hx-swap="outerHTML">Accept All Changes</button>`
         : '';
 
     // Determine default active tab
@@ -118,12 +128,12 @@ export function renderReviewPage(
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Review &mdash; ${escapeHtml(projectName)} &mdash; ${escapeHtml(commitHash)}</title>
-  <style>
-${REVIEW_CSS}
-  </style>
+  <link rel="stylesheet" href="/static/css/tokens.css">
+  <link rel="stylesheet" href="/static/css/review.css">
+  <script src="/static/js/htmx.min.js"></script>
 </head>
 <body>
-  <div class="rv">
+  <div class="rv" data-default-tab="${defaultTab}">
     <div class="rv__topbar">
       <div class="rv__breadcrumb">
         <a href="/">${escapeHtml(title)}</a>
@@ -183,154 +193,7 @@ ${REVIEW_CSS}
 
   ${errors.length > 0 ? `<!-- ${errors.length} error checkpoint(s) omitted from review -->` : ''}
 
-  <script>
-(function() {
-  var ACCEPT_URL = '${escapeHtml(reportBase)}/accept';
-  var ACCEPT_ALL_URL = '${escapeHtml(reportBase)}/accept-all';
-  var previewImg = document.getElementById('preview-img');
-  var previewEmpty = document.getElementById('preview-empty');
-  var previewLabel = document.getElementById('preview-label');
-  var selectedThumb = null;
-
-  // --- Tab switching ---
-  var tabs = document.querySelectorAll('.rv__tab');
-  var panels = document.querySelectorAll('.rv__panel');
-  tabs.forEach(function(tab) {
-    tab.addEventListener('click', function() {
-      var target = this.dataset.tab;
-      tabs.forEach(function(t) { t.classList.toggle('active', t.dataset.tab === target); });
-      panels.forEach(function(p) { p.classList.toggle('hidden', p.id !== 'tab-' + target); });
-    });
-  });
-
-  // --- Search filter ---
-  var searchInput = document.getElementById('search-input');
-  function applySearch() {
-    var raw = searchInput.value.toLowerCase().trim();
-    var words = raw ? raw.split(/\\s+/) : [];
-    document.querySelectorAll('.rv-thumb').forEach(function(thumb) {
-      var slug = thumb.dataset.slug.toLowerCase();
-      var match = words.every(function(w) { return slug.indexOf(w) !== -1; });
-      thumb.style.display = match ? '' : 'none';
-    });
-  }
-  searchInput.addEventListener('input', applySearch);
-
-  document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape' && document.activeElement === searchInput) {
-      searchInput.value = '';
-      applySearch();
-      searchInput.blur();
-      return;
-    }
-    if ((e.key === 'k' && (e.metaKey || e.ctrlKey)) || (e.key === '/' && document.activeElement.tagName !== 'INPUT')) {
-      e.preventDefault();
-      searchInput.focus();
-      searchInput.select();
-    }
-  });
-
-  // --- Preview ---
-  function showPreview(url, label) {
-    if (!url) return;
-    previewImg.src = url;
-    previewImg.style.display = '';
-    previewEmpty.style.display = 'none';
-    if (label) previewLabel.textContent = label;
-  }
-
-  // --- Thumbnails ---
-  document.querySelectorAll('.rv-thumb').forEach(function(thumb) {
-    // Zone hover: switch preview
-    thumb.querySelectorAll('.rv-zone').forEach(function(zone) {
-      zone.addEventListener('mouseenter', function() {
-        var label = this.textContent + ' — ' + thumb.dataset.slug;
-        showPreview(this.dataset.img, label);
-      });
-    });
-
-    // Thumbnail hover: select and show default preview
-    thumb.addEventListener('mouseenter', function() {
-      if (selectedThumb) selectedThumb.classList.remove('selected');
-      selectedThumb = this;
-      this.classList.add('selected');
-      var statusLabel = this.dataset.status === 'fail' ? 'Diff'
-        : this.dataset.status === 'new' ? 'Actual' : 'Baseline';
-      showPreview(this.dataset.default, statusLabel + ' — ' + this.dataset.slug);
-    });
-
-    // Click to pin
-    thumb.addEventListener('click', function(e) {
-      if (e.target.closest('.rv-accept-btn')) return;
-      if (selectedThumb) selectedThumb.classList.remove('selected');
-      selectedThumb = this;
-      this.classList.add('selected');
-      var statusLabel = this.dataset.status === 'fail' ? 'Diff'
-        : this.dataset.status === 'new' ? 'Actual' : 'Baseline';
-      showPreview(this.dataset.default, statusLabel + ' — ' + this.dataset.slug);
-    });
-  });
-
-  // --- Accept single ---
-  document.querySelectorAll('.rv-accept-btn').forEach(function(btn) {
-    btn.addEventListener('click', function(e) {
-      e.stopPropagation();
-      var thumb = this.closest('.rv-thumb');
-      var self = this;
-      self.disabled = true;
-      self.textContent = '...';
-      fetch(ACCEPT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ checkpoint: thumb.dataset.cp, viewport: thumb.dataset.vp })
-      }).then(function(r) { return r.json(); })
-        .then(function(data) {
-          if (data.ok) {
-            thumb.classList.add('accepted');
-          } else {
-            self.textContent = 'Error';
-          }
-        })
-        .catch(function() { self.textContent = 'Error'; });
-    });
-  });
-
-  // --- Accept all ---
-  var acceptAllBtn = document.getElementById('accept-all-btn');
-  if (acceptAllBtn) {
-    acceptAllBtn.addEventListener('click', function() {
-      var self = this;
-      self.disabled = true;
-      self.textContent = 'Accepting...';
-      fetch(ACCEPT_ALL_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      }).then(function(r) { return r.json(); })
-        .then(function(data) {
-          if (data.ok) {
-            self.textContent = 'All accepted (' + (data.accepted || 0) + ')';
-            self.classList.add('rv-accept-all--done');
-            document.querySelectorAll('.rv-thumb[data-status="fail"], .rv-thumb[data-status="new"]')
-              .forEach(function(t) { t.classList.add('accepted'); });
-          } else {
-            self.textContent = 'Error';
-          }
-        })
-        .catch(function() { self.textContent = 'Error'; });
-    });
-  }
-
-  // --- Initial state: select first thumbnail ---
-  var first = document.querySelector('#tab-' + '${defaultTab}' + ' .rv-thumb');
-  if (first) {
-    first.classList.add('selected');
-    selectedThumb = first;
-    var statusLabel = first.dataset.status === 'fail' ? 'Diff'
-      : first.dataset.status === 'new' ? 'Actual' : 'Baseline';
-    showPreview(first.dataset.default, statusLabel + ' — ' + first.dataset.slug);
-  }
-})();
-  </script>
+  <script src="/static/js/review.js"></script>
 </body>
 </html>`;
 }
