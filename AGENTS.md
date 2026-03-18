@@ -31,6 +31,7 @@ Megatest is a local-first visual regression testing tool written in TypeScript, 
 | Browser Automation | Playwright 1.48.x |
 | Image Diffing | pixelmatch 6.x, pngjs 7.x |
 | Config Format | YAML (js-yaml 4.x) |
+| Testing | Vitest 4.x, @vitest/coverage-v8 |
 
 ### Key Directories
 
@@ -88,6 +89,17 @@ node projects/cli/bin/megatest.js accept --repo <path>
 node projects/serve/bin/megatest-serve.js --config serve.config.yml
 ```
 
+### Testing
+
+```bash
+npm test                              # Run all tests
+npm test -w @megatest/cli             # Run tests for a single package
+npx vitest --watch                    # Watch mode (development)
+npm run test:coverage                 # Run with coverage report (80% threshold)
+```
+
+Test files live in `projects/<pkg>/test/` directories. Tests are written with Vitest.
+
 ### Prerequisites
 
 ```bash
@@ -138,9 +150,10 @@ Before committing:
 ```bash
 npm run build          # Must compile cleanly (strict mode)
 npm run check          # Biome lint + format check (warnings OK, errors fail)
+npm test               # All tests must pass
 ```
 
-No test framework is set up yet — rely on manual testing with the CLI commands and TypeScript compiler strictness.
+For coverage reports: `npm run test:coverage` (must meet 80% threshold).
 
 A pre-commit hook auto-formats staged `.ts` files and runs the linter. Install with: `bash scripts/install_git_hooks.sh`
 
