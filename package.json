@@ -5,13 +5,18 @@
   ],
   "scripts": {
     "build": "npm run build -w @megatest/core && npm run build -w @megatest/cli && npm run build -w @megatest/serve",
-    "check": "biome check projects/*/src",
-    "check:fix": "biome check --write projects/*/src",
-    "format": "biome format --write projects/*/src",
-    "lint": "biome lint projects/*/src"
+    "check": "biome check projects/*/src projects/*/test",
+    "check:fix": "biome check --write projects/*/src projects/*/test",
+    "format": "biome format --write projects/*/src projects/*/test",
+    "lint": "biome lint projects/*/src projects/*/test",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.0",
-    "typescript": "^5.4.0"
+    "@vitest/coverage-v8": "^4.1.0",
+    "typescript": "^5.4.0",
+    "vitest": "^4.1.0"
   }
 }

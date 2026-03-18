@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import type { ImageCodec } from '@megatest/core';
 import type { CheckpointResult } from '@megatest/core';
 import type { Browser } from 'playwright';
-import type { Include, LoadedConfig, Step, Viewport } from '../config/schema.js';
+import type { LoadedConfig, Step, Viewport } from '../config/schema.js';
 import { interpolateStep } from '../config/variables.js';
 import {
     printProgress,
@@ -14,28 +14,7 @@ import {
 } from '../reporter/console.js';
 import { createContext, createPage, launchBrowser } from './browser.js';
 import { type StepContext, executeStep } from './steps.js';
-
-/** Format step data as a compact string for error context */
-function formatStepSummary(stepType: string, stepData: unknown): string {
-    if (stepData === undefined || stepData === null) return stepType;
-    if (typeof stepData === 'string' || typeof stepData === 'number') {
-        return `${stepType}: ${stepData}`;
-    }
-    if (typeof stepData === 'object') {
-        const parts: string[] = [];
-        for (const [k, v] of Object.entries(stepData as Record<string, unknown>)) {
-            if (typeof v === 'string') {
-                // Truncate long values
-                const display = v.length > 60 ? `${v.slice(0, 57)}...` : v;
-                parts.push(`${k}: "${display}"`);
-            } else if (v !== undefined) {
-                parts.push(`${k}: ${JSON.stringify(v)}`);
-            }
-        }
-        return `${stepType}: { ${parts.join(', ')} }`;
-    }
-    return `${stepType}: ${JSON.stringify(stepData)}`;
-}
+import { formatStepSummary, resolveIncludes } from './utils.js';
 
 export interface EngineOptions {
     config: LoadedConfig;
@@ -51,29 +30,6 @@ interface WorkTask {
     vpName: string;
     vpSize: Viewport;
     resolvedSteps: Step[];
-}
-
-// Resolve includes: expand include steps inline, detect circular refs
-function resolveIncludes(steps: Step[], includes: Map<string, Include>, visited: Set<string> = new Set()): Step[] {
-    const resolved: Step[] = [];
-    for (const step of steps) {
-        if ('include' in step) {
-            const name = (step as { include: string }).include;
-            if (visited.has(name)) {
-                throw new Error(`Circular include detected: ${name}`);
-            }
-            const inc = includes.get(name);
-            if (!inc) {
-                throw new Error(`Include not found: ${name}`);
-            }
-            visited.add(name);
-            const expanded = resolveIncludes(inc.steps, includes, new Set(visited));
-            resolved.push(...expanded);
-        } else {
-            resolved.push(step);
-        }
-    }
-    return resolved;
 }
 
 /** Run a single (workflow, viewport) pair in its own browser context */

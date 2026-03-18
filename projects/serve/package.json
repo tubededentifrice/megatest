@@ -6,7 +6,8 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc --build && npm run build:static",
-    "build:static": "node scripts/build-static.mjs"
+    "build:static": "node scripts/build-static.mjs",
+    "test": "vitest run"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.11",
