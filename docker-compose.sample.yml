@@ -1,0 +1,21 @@
+# Megatest Serve — Docker Compose
+#
+# Quick start:
+#   1. Copy this file:  cp docker-compose.sample.yml docker-compose.yml
+#   2. Copy the config: cp serve.config.sample.yml serve.config.yml
+#   3. Edit both files to point at your project directories
+#   4. Run: docker compose up --build -d
+#
+# Each project volume should map a repo root (containing .megatest/) into
+# the container, then reference that path in serve.config.yml.
+
+services:
+  megatest:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./serve.config.yml:/app/serve.config.yml:ro
+      # Map your project directories into the container:
+      # - /path/to/my-app:/data/my-app

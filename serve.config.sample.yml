@@ -1,4 +1,9 @@
-# Megatest serve configuration
+# Megatest Serve — Configuration
+#
+# Copy this file:  cp serve.config.sample.yml serve.config.yml
+# Then edit the projects list below to point at your repos.
+# Each project path should contain a .megatest/ directory.
+
 title: "Megatest Reports"
 
 server:

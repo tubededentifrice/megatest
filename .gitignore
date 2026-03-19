@@ -38,5 +38,6 @@ npm-debug.log*
 coverage/
 .nyc_output/
 
-# Serve config (contains local paths)
+# Local config (contains machine-specific paths)
 serve.config.yml
+docker-compose.yml
