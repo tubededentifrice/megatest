@@ -63,6 +63,13 @@ look for generic issues.
 Call `EnterPlanMode` to switch to read-only analysis. All investigation happens
 here before proposing any changes.
 
+**Do NOT repeat the original implementation plan in your new plan.** The
+selfreview plan is a review checklist and findings report — not a copy of what
+was just built. You may reference the original plan inline (e.g. "the config
+loader change from step 4 of the original plan doesn't validate the new field")
+when it helps the next implementer understand *what* you're referring to, but
+never reproduce it wholesale.
+
 ## Phase 3: Deep Review
 
 Be **adversarial**. Assume the code has bugs. Try to break it.
