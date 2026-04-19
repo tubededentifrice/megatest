@@ -12,7 +12,27 @@ Deep, skeptical review of your own recent changes. Find what you missed.
 Run after completing any non-trivial coding task. The goal is to catch bugs,
 missing edge cases, and unintended consequences before committing.
 
-## Workflow
+## Two Modes
+
+The skill runs in one of two modes:
+
+- **Interactive mode (default)** — full workflow below: enter plan mode, report
+  findings, ask the user how to triage, then fix.
+- **Autofix mode** — used when the self-review is itself a paired follow-up
+  task (e.g. a Beads task with the `selfreview` label in repos that use Beads).
+  Skip plan mode, skip user triage, fix every BUGS / MISSING / RISKY finding
+  directly, then commit.
+
+Use autofix mode when any of these is true:
+- The user invokes the skill as `/selfreview autofix` (or `--autofix`).
+- The current claimed task carries the `selfreview` label.
+- The user explicitly asks for a hands-off self-review.
+
+**Autofix mode never creates another self-review follow-up for its own
+findings** — that would infinite-loop with the task-pairing rule used by
+sibling `/beads` skills in other repos.
+
+## Workflow (interactive mode)
 
 ```
 1. GATHER CHANGES (git diff, git log)
@@ -27,6 +47,22 @@ missing edge cases, and unintended consequences before committing.
    ↓
 6. FIX (exit plan mode, apply fixes)
 ```
+
+## Workflow (autofix mode)
+
+```
+1. GATHER CHANGES (git diff, git log, task context)
+   ↓
+3. DEEP REVIEW (systematic, skeptical) — same as interactive
+   ↓
+4. WRITE FINDINGS (for the commit message / task comment)
+   ↓
+6. FIX every BUGS / MISSING / RISKY finding
+   ↓
+7. RUN BUILD, COMMIT, PUSH, CLOSE THE TASK
+```
+
+Phases 2 and 5 are skipped entirely in autofix mode.
 
 ## Phase 1: Gather Changes
 
@@ -195,10 +231,23 @@ If user wants details, walk through findings one at a time with context.
 
 ## Phase 6: Fix
 
-Exit plan mode and apply the agreed-upon fixes. After fixing:
+**Interactive mode**: exit plan mode and apply the agreed-upon fixes.
+
+**Autofix mode**: apply fixes for every BUGS, MISSING, and RISKY finding.
+Skip NITPICKS unless trivially safe. Do not ask the user.
+
+After fixing (both modes):
 
 1. Build: `npm run build`
-2. If build passes, present the fixes for the user to review
+2. If build passes, present the fixes for the user to review (interactive) or
+   commit, push, and close the paired follow-up task (autofix).
+
+## Phase 7: Close the paired task (autofix mode only)
+
+If the autofix was triggered by a paired follow-up task (e.g. a Beads task
+with the `selfreview` label), close it after committing — with a short
+summary of what was fixed. Do NOT create a new self-review follow-up for the
+fixes you just applied — that would infinite-loop with the pairing rule.
 
 ## Tips
 
